@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
 
 export async function getReleases() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data } = await supabase
     .from("platform_releases")
     .select("*")
@@ -15,6 +17,7 @@ export async function getReleases() {
 
 export async function createRelease(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   const version = String(form.get("version"));
   const title = String(form.get("title"));
@@ -32,16 +35,19 @@ export async function createRelease(form: FormData) {
 
 export async function updateReleaseStatus(id: string, status: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
-  const updates: Record<string, unknown> = { status };
-  if (status === "deployed") updates.deployed_at = new Date().toISOString();
-  await supabase.from("platform_releases").update(updates).eq("id", id);
+  await supabase.from("platform_releases").update({
+    status,
+    ...(status === "deployed" ? { deployed_at: new Date().toISOString() } : {}),
+  }).eq("id", id);
   await recordAuditEvent(buildDataAuditEvent("update", "platform_release", id, user?.id ?? null, `Release status changed to ${status}`));
   revalidatePath("/employee/platform/releases");
 }
 
 export async function signOffRelease(id: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_releases").update({
     signed_off_by: user?.id ?? null,

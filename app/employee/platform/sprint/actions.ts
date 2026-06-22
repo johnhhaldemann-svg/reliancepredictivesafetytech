@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
 
 export async function getSprintsWithTasks() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: sprints } = await supabase
     .from("platform_sprints")
     .select("*, platform_sprint_tasks(*)")
@@ -15,6 +17,7 @@ export async function getSprintsWithTasks() {
 
 export async function createSprint(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   const sprintNumber = Number(form.get("sprint_number"));
   const title = String(form.get("title"));
@@ -33,6 +36,7 @@ export async function createSprint(form: FormData) {
 
 export async function updateSprintStatus(id: string, status: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_sprints").update({ status }).eq("id", id);
   await recordAuditEvent(buildDataAuditEvent("update", "platform_sprint", id, user?.id ?? null, `Sprint status changed to ${status}`));
@@ -41,6 +45,7 @@ export async function updateSprintStatus(id: string, status: string) {
 
 export async function createTask(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_sprint_tasks").insert({
     sprint_id: String(form.get("sprint_id")),
@@ -55,6 +60,7 @@ export async function createTask(form: FormData) {
 
 export async function updateTaskStatus(id: string, status: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   await supabase.from("platform_sprint_tasks").update({ status }).eq("id", id);
   revalidatePath("/employee/platform/sprint");
 }

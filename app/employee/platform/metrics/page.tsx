@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 async function getPlatformMetrics() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
 
   const [sprints, releases, testPlans, packages] = await Promise.all([
     supabase.from("platform_sprints").select("status, velocity_points, capacity_points"),

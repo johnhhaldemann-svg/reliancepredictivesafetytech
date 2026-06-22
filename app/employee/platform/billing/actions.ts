@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
 
 export async function getSubscriptionTiers() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data } = await supabase
     .from("platform_subscription_tiers")
     .select("*")
@@ -16,6 +18,7 @@ export async function getSubscriptionTiers() {
 
 export async function getTenantSubscriptions() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data } = await supabase
     .from("platform_tenant_subscriptions")
     .select("*, platform_subscription_tiers(name, tier_key)")
@@ -25,6 +28,7 @@ export async function getTenantSubscriptions() {
 
 export async function createTenantSubscription(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   const tenantName = String(form.get("tenant_name"));
   const trialDays = 14;
@@ -43,6 +47,7 @@ export async function createTenantSubscription(form: FormData) {
 
 export async function updateSubscriptionStatus(id: string, status: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_tenant_subscriptions").update({ status }).eq("id", id);
   await recordAuditEvent(buildDataAuditEvent("update", "platform_tenant_subscription", id, user?.id ?? null, `Subscription status changed to ${status}`));
@@ -51,6 +56,7 @@ export async function updateSubscriptionStatus(id: string, status: string) {
 
 export async function updateSubscriptionTier(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   await supabase.from("platform_subscription_tiers").upsert({
     tier_key: String(form.get("tier_key")),
     name: String(form.get("name")),

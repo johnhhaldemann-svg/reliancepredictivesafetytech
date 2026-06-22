@@ -2776,6 +2776,644 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["portal_user_module_access"]["Insert"]>;
         Relationships: [];
       };
+      platform_sprints: {
+        Row: {
+          id: string;
+          sprint_number: number;
+          title: string;
+          goal: string | null;
+          start_date: string;
+          end_date: string;
+          status: string;
+          velocity_points: number | null;
+          capacity_points: number | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          sprint_number: number;
+          title: string;
+          goal?: string | null;
+          start_date: string;
+          end_date: string;
+          status?: string;
+          velocity_points?: number | null;
+          capacity_points?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_sprints"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_sprint_tasks: {
+        Row: {
+          id: string;
+          sprint_id: string | null;
+          title: string;
+          description: string | null;
+          status: string;
+          priority: string;
+          estimate_points: number | null;
+          assigned_to: string | null;
+          tags: string[];
+          blocker_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          sprint_id?: string | null;
+          title: string;
+          description?: string | null;
+          status?: string;
+          priority?: string;
+          estimate_points?: number | null;
+          assigned_to?: string | null;
+          tags?: string[];
+          blocker_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_sprint_tasks"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "platform_sprint_tasks_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "platform_sprints";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      platform_releases: {
+        Row: {
+          id: string;
+          version: string;
+          title: string;
+          environment: string;
+          status: string;
+          release_notes: string | null;
+          migration_required: boolean;
+          rollback_plan: string | null;
+          sign_off_required: boolean;
+          deployed_by: string | null;
+          deployed_at: string | null;
+          signed_off_by: string | null;
+          signed_off_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          version: string;
+          title: string;
+          environment?: string;
+          status?: string;
+          release_notes?: string | null;
+          migration_required?: boolean;
+          rollback_plan?: string | null;
+          sign_off_required?: boolean;
+          deployed_by?: string | null;
+          deployed_at?: string | null;
+          signed_off_by?: string | null;
+          signed_off_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_releases"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_test_plans: {
+        Row: {
+          id: string;
+          title: string;
+          related_release_id: string | null;
+          status: string;
+          total_scenarios: number;
+          passed_scenarios: number;
+          failed_scenarios: number;
+          blocked_scenarios: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          related_release_id?: string | null;
+          status?: string;
+          total_scenarios?: number;
+          passed_scenarios?: number;
+          failed_scenarios?: number;
+          blocked_scenarios?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_test_plans"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_test_results: {
+        Row: {
+          id: string;
+          test_plan_id: string | null;
+          scenario: string;
+          acceptance_criteria: string | null;
+          result: string;
+          notes: string | null;
+          tested_by: string | null;
+          tested_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          test_plan_id?: string | null;
+          scenario: string;
+          acceptance_criteria?: string | null;
+          result?: string;
+          notes?: string | null;
+          tested_by?: string | null;
+          tested_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_test_results"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "platform_test_results_test_plan_id_fkey";
+            columns: ["test_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "platform_test_plans";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      platform_runbooks: {
+        Row: {
+          id: string;
+          category: string;
+          title: string;
+          content: string;
+          version: string | null;
+          last_reviewed_at: string | null;
+          reviewed_by: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          category?: string;
+          title: string;
+          content?: string;
+          version?: string | null;
+          last_reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_runbooks"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_vertical_packages: {
+        Row: {
+          id: string;
+          name: string;
+          vertical_key: string;
+          description: string | null;
+          current_version: string;
+          status: string;
+          changelog: string | null;
+          pilot_feature_flags: Record<string, unknown>;
+          scenario_test_count: number;
+          repository_url: string | null;
+          owner_notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          vertical_key: string;
+          description?: string | null;
+          current_version?: string;
+          status?: string;
+          changelog?: string | null;
+          pilot_feature_flags?: Record<string, unknown>;
+          scenario_test_count?: number;
+          repository_url?: string | null;
+          owner_notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_vertical_packages"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_audit_events: {
+        Row: {
+          id: string;
+          event_type: string;
+          event_category: string;
+          severity: string;
+          actor_id: string | null;
+          actor_role: string | null;
+          tenant_id: string | null;
+          resource_type: string | null;
+          resource_id: string | null;
+          summary: string;
+          before_state: Record<string, unknown> | null;
+          after_state: Record<string, unknown> | null;
+          evidence_links: string[];
+          ip_address: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          event_category?: string;
+          severity?: string;
+          actor_id?: string | null;
+          actor_role?: string | null;
+          tenant_id?: string | null;
+          resource_type?: string | null;
+          resource_id?: string | null;
+          summary: string;
+          before_state?: Record<string, unknown> | null;
+          after_state?: Record<string, unknown> | null;
+          evidence_links?: string[];
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_audit_events"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_subscription_tiers: {
+        Row: {
+          id: string;
+          tier_key: string;
+          name: string;
+          description: string | null;
+          monthly_price_cents: number;
+          annual_price_cents: number;
+          max_users: number | null;
+          max_sites: number | null;
+          features: unknown[];
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tier_key: string;
+          name: string;
+          description?: string | null;
+          monthly_price_cents?: number;
+          annual_price_cents?: number;
+          max_users?: number | null;
+          max_sites?: number | null;
+          features?: unknown[];
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_subscription_tiers"]["Insert"]>;
+        Relationships: [];
+      };
+      platform_tenant_subscriptions: {
+        Row: {
+          id: string;
+          tenant_name: string;
+          tenant_email: string | null;
+          tier_id: string | null;
+          status: string;
+          trial_ends_at: string | null;
+          current_period_start: string | null;
+          current_period_end: string | null;
+          max_users_override: number | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_name: string;
+          tenant_email?: string | null;
+          tier_id?: string | null;
+          status?: string;
+          trial_ends_at?: string | null;
+          current_period_start?: string | null;
+          current_period_end?: string | null;
+          max_users_override?: number | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_tenant_subscriptions"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "platform_tenant_subscriptions_tier_id_fkey";
+            columns: ["tier_id"];
+            isOneToOne: false;
+            referencedRelation: "platform_subscription_tiers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      platform_health_checks: {
+        Row: {
+          id: string;
+          check_name: string;
+          status: string;
+          response_ms: number | null;
+          details: Record<string, unknown> | null;
+          checked_at: string;
+        };
+        Insert: {
+          id?: string;
+          check_name: string;
+          status: string;
+          response_ms?: number | null;
+          details?: Record<string, unknown> | null;
+          checked_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_health_checks"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_prompt_templates: {
+        Row: {
+          id: string;
+          prompt_key: string;
+          name: string;
+          description: string | null;
+          category: string;
+          template_text: string;
+          version: string;
+          model_hint: string | null;
+          max_tokens: number | null;
+          temperature: number | null;
+          confidence_threshold: number;
+          requires_human_review: boolean;
+          is_active: boolean;
+          test_scenario_count: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          prompt_key: string;
+          name: string;
+          description?: string | null;
+          category?: string;
+          template_text: string;
+          version?: string;
+          model_hint?: string | null;
+          max_tokens?: number | null;
+          temperature?: number | null;
+          confidence_threshold?: number;
+          requires_human_review?: boolean;
+          is_active?: boolean;
+          test_scenario_count?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_prompt_templates"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_prompt_versions: {
+        Row: {
+          id: string;
+          prompt_template_id: string | null;
+          version: string;
+          template_text: string;
+          change_summary: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          prompt_template_id?: string | null;
+          version: string;
+          template_text: string;
+          change_summary?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_prompt_versions"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_model_registry: {
+        Row: {
+          id: string;
+          model_key: string;
+          name: string;
+          description: string | null;
+          model_type: string;
+          provider: string;
+          model_id: string;
+          version: string;
+          status: string;
+          accuracy_score: number | null;
+          f1_score: number | null;
+          last_evaluated_at: string | null;
+          retrain_trigger_threshold: number;
+          fallback_model_key: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          model_key: string;
+          name: string;
+          description?: string | null;
+          model_type?: string;
+          provider?: string;
+          model_id: string;
+          version?: string;
+          status?: string;
+          accuracy_score?: number | null;
+          f1_score?: number | null;
+          last_evaluated_at?: string | null;
+          retrain_trigger_threshold?: number;
+          fallback_model_key?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_model_registry"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_gateway_log: {
+        Row: {
+          id: string;
+          request_id: string;
+          prompt_key: string | null;
+          model_used: string | null;
+          input_tokens: number | null;
+          output_tokens: number | null;
+          latency_ms: number | null;
+          validation_status: string;
+          validation_checks: Record<string, unknown>;
+          confidence_score: number | null;
+          required_human_review: boolean;
+          human_reviewed_by: string | null;
+          human_reviewed_at: string | null;
+          human_verdict: string | null;
+          output_summary: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          prompt_key?: string | null;
+          model_used?: string | null;
+          input_tokens?: number | null;
+          output_tokens?: number | null;
+          latency_ms?: number | null;
+          validation_status?: string;
+          validation_checks?: Record<string, unknown>;
+          confidence_score?: number | null;
+          required_human_review?: boolean;
+          human_reviewed_by?: string | null;
+          human_reviewed_at?: string | null;
+          human_verdict?: string | null;
+          output_summary?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_gateway_log"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_feedback_entries: {
+        Row: {
+          id: string;
+          gateway_log_id: string | null;
+          prompt_key: string | null;
+          feedback_type: string;
+          original_output: string | null;
+          corrected_output: string | null;
+          rejection_reason: string | null;
+          submitted_by: string | null;
+          submitted_at: string;
+          included_in_retrain: boolean;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          gateway_log_id?: string | null;
+          prompt_key?: string | null;
+          feedback_type: string;
+          original_output?: string | null;
+          corrected_output?: string | null;
+          rejection_reason?: string | null;
+          submitted_by?: string | null;
+          submitted_at?: string;
+          included_in_retrain?: boolean;
+          notes?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_feedback_entries"]["Insert"]>;
+        Relationships: [];
+      };
+      infra_deployment_log: {
+        Row: {
+          id: string;
+          release_id: string | null;
+          environment: string;
+          deploy_method: string;
+          git_sha: string | null;
+          git_branch: string | null;
+          status: string;
+          duration_seconds: number | null;
+          error_message: string | null;
+          triggered_by: string | null;
+          started_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          release_id?: string | null;
+          environment: string;
+          deploy_method?: string;
+          git_sha?: string | null;
+          git_branch?: string | null;
+          status?: string;
+          duration_seconds?: number | null;
+          error_message?: string | null;
+          triggered_by?: string | null;
+          started_at?: string;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["infra_deployment_log"]["Insert"]>;
+        Relationships: [];
+      };
+      infra_cost_entries: {
+        Row: {
+          id: string;
+          period_month: string;
+          service: string;
+          category: string;
+          amount_cents: number;
+          currency: string;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          period_month: string;
+          service: string;
+          category?: string;
+          amount_cents?: number;
+          currency?: string;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["infra_cost_entries"]["Insert"]>;
+        Relationships: [];
+      };
+      infra_security_scans: {
+        Row: {
+          id: string;
+          scan_type: string;
+          status: string;
+          findings_count: number;
+          critical_count: number;
+          high_count: number;
+          summary: string | null;
+          raw_output: string | null;
+          remediated_at: string | null;
+          remediated_by: string | null;
+          scanned_at: string;
+        };
+        Insert: {
+          id?: string;
+          scan_type: string;
+          status: string;
+          findings_count?: number;
+          critical_count?: number;
+          high_count?: number;
+          summary?: string | null;
+          raw_output?: string | null;
+          remediated_at?: string | null;
+          remediated_by?: string | null;
+          scanned_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["infra_security_scans"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       company_position_employee_directory: {

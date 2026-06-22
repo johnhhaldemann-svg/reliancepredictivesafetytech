@@ -11,6 +11,9 @@ export async function GET() {
   try {
     const dbStart = Date.now();
     const supabase = await createClient();
+    if (!supabase) {
+      checks.push({ name: "database", status: "fail", ms: 0, detail: "Supabase client unavailable (missing env vars)" });
+    } else {
     const { error } = await supabase.from("user_roles").select("user_id").limit(1);
     checks.push({
       name: "database",
@@ -18,6 +21,7 @@ export async function GET() {
       ms: Date.now() - dbStart,
       detail: error?.message,
     });
+    }
   } catch (e) {
     checks.push({ name: "database", status: "fail", ms: Date.now() - start, detail: String(e) });
   }

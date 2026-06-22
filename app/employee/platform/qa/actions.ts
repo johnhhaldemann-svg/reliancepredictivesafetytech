@@ -2,9 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export async function getTestPlans() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data } = await supabase
     .from("platform_test_plans")
     .select("*, platform_test_results(*)")
@@ -14,6 +16,7 @@ export async function getTestPlans() {
 
 export async function createTestPlan(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_test_plans").insert({
     title: String(form.get("title")),
@@ -25,6 +28,7 @@ export async function createTestPlan(form: FormData) {
 
 export async function addTestResult(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   const planId = String(form.get("test_plan_id"));
   await supabase.from("platform_test_results").insert({
@@ -39,6 +43,7 @@ export async function addTestResult(form: FormData) {
 
 export async function updateTestResult(id: string, result: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   await supabase.from("platform_test_results").update({
     result,
     tested_at: new Date().toISOString(),
@@ -48,6 +53,7 @@ export async function updateTestResult(id: string, result: string) {
 
 export async function updateTestPlanStatus(id: string, status: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   await supabase.from("platform_test_plans").update({ status }).eq("id", id);
   revalidatePath("/employee/platform/qa");
 }

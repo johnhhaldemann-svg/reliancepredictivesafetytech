@@ -2,9 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export async function getRunbooks() {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data } = await supabase
     .from("platform_runbooks")
     .select("*")
@@ -15,6 +17,7 @@ export async function getRunbooks() {
 
 export async function createRunbook(form: FormData) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_runbooks").insert({
     category: String(form.get("category") ?? "general"),
@@ -27,12 +30,14 @@ export async function createRunbook(form: FormData) {
 
 export async function updateRunbook(id: string, content: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   await supabase.from("platform_runbooks").update({ content }).eq("id", id);
   revalidatePath("/employee/platform/docs");
 }
 
 export async function markRunbookReviewed(id: string) {
   const supabase = await createClient();
+  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_runbooks").update({
     last_reviewed_at: new Date().toISOString(),

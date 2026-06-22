@@ -29,7 +29,7 @@ export function validateVerticalPackageAdvancement(
     return { allowed: true };
   }
 
-  if (targetIdx <= currentIdx && target !== "deprecated") {
+  if (targetIdx <= currentIdx) {
     return { allowed: false, reason: `Cannot downgrade status from ${current} to ${target}` };
   }
 

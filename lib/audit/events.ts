@@ -7,6 +7,7 @@ export { buildAuthAuditEvent, buildDataAuditEvent, buildSecurityAuditEvent } fro
 export async function recordAuditEvent(payload: AuditEventPayload): Promise<void> {
   try {
     const supabase = createAdminClient();
+    if (!supabase) return;
     await supabase.from("platform_audit_events").insert({
       event_type: payload.event_type,
       event_category: payload.event_category ?? "general",
