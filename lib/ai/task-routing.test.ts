@@ -65,6 +65,18 @@ describe("getWorkflowActionHref", () => {
     expect(getWorkflowActionHref({ sourceType: "demo_request", sourceId: null })).toBe("/employee/ai");
   });
 
+  it("routes platform_sprint to sprint page", () => {
+    expect(getWorkflowActionHref({ sourceType: "platform_sprint", sourceId: "sp-1" })).toBe("/employee/platform/sprint");
+  });
+
+  it("routes platform_release to releases page", () => {
+    expect(getWorkflowActionHref({ sourceType: "platform_release", sourceId: "rel-1" })).toBe("/employee/platform/releases");
+  });
+
+  it("routes platform_billing to billing page", () => {
+    expect(getWorkflowActionHref({ sourceType: "platform_billing", sourceId: "bill-1" })).toBe("/employee/platform/billing");
+  });
+
   it("returns fallback for unknown source type", () => {
     expect(getWorkflowActionHref({ sourceType: "unknown_future_type", sourceId: "x" })).toBe("/employee/ai");
   });
@@ -87,6 +99,12 @@ describe("getWorkflowSourceLabel", () => {
 
   it("labels AI proposals", () => {
     expect(getWorkflowSourceLabel("workflow_action_proposal")).toBe("AI Proposal");
+  });
+
+  it("labels platform types", () => {
+    expect(getWorkflowSourceLabel("platform_sprint")).toBe("Platform");
+    expect(getWorkflowSourceLabel("platform_release")).toBe("Platform");
+    expect(getWorkflowSourceLabel("platform_billing")).toBe("Platform");
   });
 
   it("returns fallback label for unknown type", () => {
