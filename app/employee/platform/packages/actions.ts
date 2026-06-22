@@ -1,12 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 export async function getVerticalPackages() {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data } = await supabase
     .from("platform_vertical_packages")
     .select("*")
@@ -15,8 +13,7 @@ export async function getVerticalPackages() {
 }
 
 export async function createVerticalPackage(form: FormData) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   await supabase.from("platform_vertical_packages").insert({
     name: String(form.get("name")),
     vertical_key: String(form.get("vertical_key")),
@@ -29,15 +26,13 @@ export async function createVerticalPackage(form: FormData) {
 }
 
 export async function updatePackageStatus(id: string, status: string) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   await supabase.from("platform_vertical_packages").update({ status }).eq("id", id);
   revalidatePath("/employee/platform/packages");
 }
 
 export async function updatePackageVersion(id: string, version: string, changelog: string) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   await supabase.from("platform_vertical_packages").update({
     current_version: version,
     changelog,

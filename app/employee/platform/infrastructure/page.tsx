@@ -93,9 +93,9 @@ export default async function InfrastructurePage() {
               <span style={{ fontWeight: 700, fontSize: 12, color: SCAN_STATUS_COLORS[scan.status], minWidth: 40 }}>{scan.status}</span>
               <span style={{ fontSize: 12, textTransform: "uppercase", color: "var(--portal-muted)", minWidth: 130 }}>{scan.scan_type.replace(/_/g, " ")}</span>
               <span style={{ flex: 1, fontSize: 13 }}>{scan.summary ?? "—"}</span>
-              {scan.critical_count > 0 && <span style={{ fontSize: 11, color: "#ff2020", fontWeight: 700 }}>{scan.critical_count} critical</span>}
-              {scan.high_count > 0 && <span style={{ fontSize: 11, color: "#ff6b6b", fontWeight: 700 }}>{scan.high_count} high</span>}
-              <span style={{ fontSize: 11, color: "var(--portal-muted)", whiteSpace: "nowrap" }}>{new Date(scan.scanned_at).toLocaleDateString()}</span>
+              {(scan.critical_count ?? 0) > 0 && <span style={{ fontSize: 11, color: "#ff2020", fontWeight: 700 }}>{scan.critical_count} critical</span>}
+              {(scan.high_count ?? 0) > 0 && <span style={{ fontSize: 11, color: "#ff6b6b", fontWeight: 700 }}>{scan.high_count} high</span>}
+              <span style={{ fontSize: 11, color: "var(--portal-muted)", whiteSpace: "nowrap" }}>{scan.scanned_at ? new Date(scan.scanned_at).toLocaleDateString() : "—"}</span>
             </div>
           ))}
         </div>
@@ -132,7 +132,7 @@ export default async function InfrastructurePage() {
               {d.git_sha && <code style={{ fontSize: 11, color: "var(--portal-muted)" }}>{d.git_sha.slice(0, 8)}</code>}
               {d.git_branch && <span style={{ fontSize: 12, color: "var(--portal-muted)", flex: 1 }}>{d.git_branch}</span>}
               {d.error_message && <span style={{ fontSize: 11, color: "#ff6b6b" }}>{d.error_message}</span>}
-              <span style={{ fontSize: 11, color: "var(--portal-muted)", whiteSpace: "nowrap" }}>{new Date(d.started_at).toLocaleString()}</span>
+              <span style={{ fontSize: 11, color: "var(--portal-muted)", whiteSpace: "nowrap" }}>{d.started_at ? new Date(d.started_at).toLocaleString() : "—"}</span>
             </div>
           ))}
         </div>

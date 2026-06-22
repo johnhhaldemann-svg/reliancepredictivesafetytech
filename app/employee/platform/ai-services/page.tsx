@@ -128,7 +128,7 @@ export default async function AIServicesPage() {
               <code style={{ fontSize: 11, color: "var(--portal-muted)" }}>{entry.prompt_key ?? "—"}</code>
               <span style={{ flex: 1, fontSize: 12 }}>{entry.output_summary ?? "—"}</span>
               {entry.required_human_review && <span style={{ fontSize: 11, color: "#f5a623" }}> needs review</span>}
-              <span style={{ fontSize: 11, color: "var(--portal-muted)", whiteSpace: "nowrap" }}>{new Date(entry.created_at).toLocaleString()}</span>
+              <span style={{ fontSize: 11, color: "var(--portal-muted)", whiteSpace: "nowrap" }}>{entry.created_at ? new Date(entry.created_at).toLocaleString() : "—"}</span>
             </div>
           ))}
         </div>
@@ -158,7 +158,7 @@ export default async function AIServicesPage() {
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#c8a2ff" }}>{f.feedback_type}</span>
                 {f.prompt_key && <code style={{ fontSize: 11, color: "var(--portal-muted)" }}>{f.prompt_key}</code>}
                 {f.included_in_retrain && <span style={{ fontSize: 11, color: "#42d392" }}> included in retrain</span>}
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--portal-muted)" }}>{new Date(f.submitted_at).toLocaleString()}</span>
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--portal-muted)" }}>{f.submitted_at ? new Date(f.submitted_at).toLocaleString() : "—"}</span>
               </div>
               {f.rejection_reason && <div style={{ fontSize: 12, color: "#ff6b6b" }}>{f.rejection_reason}</div>}
               {f.notes && <div style={{ fontSize: 12, color: "var(--portal-muted)" }}>{f.notes}</div>}

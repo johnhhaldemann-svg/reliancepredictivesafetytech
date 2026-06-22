@@ -1,13 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
 
 export async function getReleases() {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data } = await supabase
     .from("platform_releases")
     .select("*")
@@ -16,8 +14,7 @@ export async function getReleases() {
 }
 
 export async function createRelease(form: FormData) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data: { user } } = await supabase.auth.getUser();
   const version = String(form.get("version"));
   const title = String(form.get("title"));
@@ -34,8 +31,7 @@ export async function createRelease(form: FormData) {
 }
 
 export async function updateReleaseStatus(id: string, status: string) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_releases").update({
     status,
@@ -46,8 +42,7 @@ export async function updateReleaseStatus(id: string, status: string) {
 }
 
 export async function signOffRelease(id: string) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("platform_releases").update({
     signed_off_by: user?.id ?? null,

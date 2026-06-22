@@ -45,8 +45,8 @@ export default async function PackagesPage() {
             {pkg.description && <p style={{ fontSize: 13, color: "var(--portal-muted)", margin: "8px 0 0" }}>{pkg.description}</p>}
             {pkg.changelog && <p style={{ fontSize: 12, color: "var(--portal-muted)", margin: "6px 0 0" }}>{pkg.changelog}</p>}
             <div style={{ fontSize: 12, color: "var(--portal-muted)", margin: "8px 0 0" }}>
-              {pkg.scenario_test_count} test scenarios
-              {pkg.scenario_test_count < 20 && <span style={{ color: "#f5a623", marginLeft: 6 }}>(minimum 20 required)</span>}
+              {pkg.scenario_test_count ?? 0} test scenarios
+              {(pkg.scenario_test_count ?? 0) < 20 && <span style={{ color: "#f5a623", marginLeft: 6 }}>(minimum 20 required)</span>}
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
               {["development", "pilot", "production", "deprecated"].filter((s) => s !== pkg.status).map((s) => (

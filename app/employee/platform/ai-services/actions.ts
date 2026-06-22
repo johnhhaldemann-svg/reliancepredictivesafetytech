@@ -1,12 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 export async function getPromptTemplates() {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data } = await supabase
     .from("ai_prompt_templates")
     .select("*")
@@ -16,8 +14,7 @@ export async function getPromptTemplates() {
 }
 
 export async function getModelRegistry() {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data } = await supabase
     .from("ai_model_registry")
     .select("*")
@@ -27,8 +24,7 @@ export async function getModelRegistry() {
 }
 
 export async function getGatewayLog(limit = 50) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data } = await supabase
     .from("ai_gateway_log")
     .select("*")
@@ -38,8 +34,7 @@ export async function getGatewayLog(limit = 50) {
 }
 
 export async function getFeedbackEntries(limit = 50) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data } = await supabase
     .from("ai_feedback_entries")
     .select("*")
@@ -49,8 +44,7 @@ export async function getFeedbackEntries(limit = 50) {
 }
 
 export async function createPromptTemplate(form: FormData) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("ai_prompt_templates").insert({
     prompt_key: String(form.get("prompt_key")),
@@ -66,15 +60,13 @@ export async function createPromptTemplate(form: FormData) {
 }
 
 export async function updateModelStatus(id: string, status: string) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   await supabase.from("ai_model_registry").update({ status }).eq("id", id);
   revalidatePath("/employee/platform/ai-services");
 }
 
 export async function submitFeedback(form: FormData) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   const { data: { user } } = await supabase.auth.getUser();
   await supabase.from("ai_feedback_entries").insert({
     prompt_key: form.get("prompt_key") ? String(form.get("prompt_key")) : null,

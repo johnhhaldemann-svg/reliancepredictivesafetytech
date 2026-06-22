@@ -1,11 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireClient } from "@/lib/supabase/server";
 
 export async function getAuditEvents(limit = 100, category?: string) {
-  const supabase = await createClient();
-  if (!supabase) { redirect("/employee-login?message=supabase-required"); }
+  const supabase = await requireClient();
   let query = supabase
     .from("platform_audit_events")
     .select("*")

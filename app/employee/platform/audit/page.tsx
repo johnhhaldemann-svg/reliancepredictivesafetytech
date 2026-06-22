@@ -65,7 +65,7 @@ export default async function AuditPage() {
               )}
             </div>
             <div style={{ fontSize: 11, color: "var(--portal-muted)", textAlign: "right", whiteSpace: "nowrap" }}>
-              {new Date(e.created_at).toLocaleString()}
+              {e.created_at ? new Date(e.created_at).toLocaleString() : "—"}
             </div>
           </div>
         ))}
