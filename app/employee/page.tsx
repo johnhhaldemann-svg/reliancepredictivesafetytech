@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Bot,
   BriefcaseBusiness,
+  Building2,
   CalendarDays,
   CarFront,
   CheckCircle2,
@@ -20,6 +21,7 @@ import {
   Network,
   ReceiptText,
   Scale,
+  ScrollText,
   ShieldCheck,
   UploadCloud,
   Users,
@@ -182,7 +184,7 @@ export default async function EmployeeDashboardPage() {
       : href === "/employee/payroll"
         ? canAccessPayroll && canAccessEmployeePath(currentRole?.role, currentRole?.account_status, href, moduleKeys)
       : canAccessEmployeePath(currentRole?.role, currentRole?.account_status, href, moduleKeys));
-  // 8 queries instead of 19 — one per table, counts derived in JS
+  // 9 queries instead of 19 — one per table, counts derived in JS
   const [
     { data: checklistStatuses },
     { data: documentStatuses },
@@ -192,6 +194,7 @@ export default async function EmployeeDashboardPage() {
     { count: openLegalIssueCount },
     { data: positionStatuses },
     { count: submittedTimeCardCount },
+    { data: proposalStatusRows },
   ] = supabase
     ? await Promise.all([
         supabase.from("company_checklist_items").select("status"),
@@ -209,6 +212,7 @@ export default async function EmployeeDashboardPage() {
           .in("status", ["Open", "In Review", "Waiting"]),
         supabase.from("company_positions").select("status"),
         supabase.from("employee_time_cards").select("*", { count: "exact", head: true }).eq("status", "submitted"),
+        supabase.from("client_proposals").select("status"),
       ])
     : [
         { data: startupChecklistSeed.map((i) => ({ status: i.status })) },
@@ -219,6 +223,7 @@ export default async function EmployeeDashboardPage() {
         { count: 0 },
         { data: companyPositionSeed.map((p) => ({ status: p.status })) },
         { count: 0 },
+        { data: [] as { status: string }[] },
       ];
 
   const checklistCount = checklistStatuses?.length ?? startupChecklistSeed.length;
@@ -232,6 +237,10 @@ export default async function EmployeeDashboardPage() {
   const requestCount = requestStatuses?.length ?? 0;
   const newRequestCount = requestStatuses?.filter((r) => r.status === "new").length ?? 0;
   const clientCount = clientStages?.length ?? 0;
+  // Quoted but not yet decided — the deals actually in flight.
+  const openProposalCount =
+    proposalStatusRows?.filter((p) => ["draft", "in_review", "sent"].includes(p.status as string)).length ?? 0;
+  const awaitingReviewCount = proposalStatusRows?.filter((p) => p.status === "in_review").length ?? 0;
   const activeCompanyCount =
     clientStages?.filter((c) => ["Active Company", "Renewal / Expansion"].includes(c.lifecycle_stage as string)).length ?? 0;
   const pipelineRows = buildPipelineCounts((clientStages ?? []) as Pick<CompanyClient, "lifecycle_stage">[]);
@@ -386,6 +395,54 @@ export default async function EmployeeDashboardPage() {
     { href: "/employee/calendar", icon: CalendarDays, title: "Calendar", description: "Your schedule and events", variant: "default" },
   ].filter((step) => canOpenPath(step.href));
 
+  /**
+   * The lead-to-close path, in order, with live counts.
+   *
+   * The Get Started panel used to teach only the HR loop — onboarding,
+   * documents, time cards, mail, calendar — and it rendered exclusively in the
+   * NON-owner branch of the KPI strip, so the people who run deals never saw any
+   * statement of how a deal moves. Owners got six tiles reading 0 on a fresh
+   * install and no entry point at all.
+   */
+  const dealSteps = [
+    {
+      href: "/employee/inbox",
+      icon: Inbox,
+      title: "1. Request Inbox",
+      description:
+        newRequestCount > 0
+          ? `${newRequestCount} new lead${newRequestCount === 1 ? "" : "s"} waiting`
+          : "Where inbound leads land",
+      variant: newRequestCount > 0 ? "urgent" : "default",
+    },
+    {
+      href: "/employee/sales",
+      icon: BarChart3,
+      title: "2. Sales Pipeline",
+      description: clientCount > 0 ? `${clientCount} compan${clientCount === 1 ? "y" : "ies"} in play` : "Add the first company",
+      variant: "default",
+    },
+    {
+      href: "/employee/clients",
+      icon: Building2,
+      title: "3. Companies",
+      description: "Open a record to run the whole deal from one screen",
+      variant: "default",
+    },
+    {
+      href: "/employee/proposals",
+      icon: ScrollText,
+      title: "4. Proposals",
+      description:
+        awaitingReviewCount > 0
+          ? `${awaitingReviewCount} awaiting review`
+          : openProposalCount > 0
+            ? `${openProposalCount} open`
+            : "Write and send a quote",
+      variant: awaitingReviewCount > 0 ? "urgent" : "default",
+    },
+  ].filter((step) => canOpenPath(step.href));
+
   return (
     <div className="command-center">
       <div className="portal-topline command-hero">
@@ -416,6 +473,41 @@ export default async function EmployeeDashboardPage() {
           </Link>
         </div>
       )}
+
+      {/* ABOVE the KPIs, not instead of them. This panel used to live in the
+          else-branch below, so it never rendered for an owner — the one person
+          who most needs to know where a deal starts saw only tiles reading 0. */}
+      {dealSteps.length > 0 ? (
+        <section className="command-panel" aria-label="How a deal moves">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Lead to close</span>
+              <h2>How a deal moves</h2>
+            </div>
+          </div>
+          <div className="get-started-steps">
+            {dealSteps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <Link
+                  key={step.href}
+                  href={step.href}
+                  className={`get-started-step${step.variant === "urgent" ? " get-started-step-urgent" : ""}`}
+                >
+                  <span className="get-started-step-icon">
+                    <Icon size={18} />
+                  </span>
+                  <span className="get-started-step-text">
+                    <strong>{step.title}</strong>
+                    <span>{step.description}</span>
+                  </span>
+                  <ArrowRight size={15} className="get-started-step-arrow" />
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {isOwnerRole ? (
         <section className="kpi-strip" aria-label="Command center KPIs">
