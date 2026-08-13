@@ -10,6 +10,7 @@ import {
   resolveProposalRoleFlags,
   validateProposalFields,
 } from "./policy";
+import { proposalStatuses } from "./types";
 import { portalUserRoles } from "@/lib/user-management";
 
 describe("proposal status transitions", () => {
@@ -31,6 +32,16 @@ describe("proposal status transitions", () => {
     expect(canTransitionProposal("accepted", "sent").ok).toBe(false);
     expect(canTransitionProposal("accepted", "draft").ok).toBe(false);
     expect(canTransitionProposal("archived", "sent").ok).toBe(false);
+  });
+
+  // The client record shows its Accepted/Declined buttons only where an outcome
+  // is actually reachable, which is `sent` and nowhere else. If that ever stops
+  // being true, the record starts offering a decision the server will refuse.
+  it("makes an outcome reachable only from sent", () => {
+    for (const status of proposalStatuses) {
+      const reachable = canTransitionProposal(status, "accepted").ok && canTransitionProposal(status, "declined").ok;
+      expect(reachable).toBe(status === "sent");
+    }
   });
 });
 

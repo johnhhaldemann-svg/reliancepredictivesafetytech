@@ -13,6 +13,9 @@
 /** Every proposal moment worth interrupting an owner for. */
 export type ProposalEventKind =
   | "submitted_for_review"
+  | "approved"
+  | "changes_requested"
+  | "sent"
   | "accepted"
   | "declined";
 
@@ -29,6 +32,8 @@ export interface ProposalEventContext {
   actorName?: string | null;
   /** The client's stated reason, for declines. */
   declineReason?: string | null;
+  /** The reviewer's note, for approvals and change requests. */
+  decisionNote?: string | null;
   /**
    * Distinguishes the same outcome arriving by different routes, so a DocuSign
    * completion and a share-link acceptance of the same proposal do not collapse
@@ -101,6 +106,51 @@ export function buildProposalNotificationContent(
       actionHref,
       dedupeKey,
       emailSubject: `Review needed: ${reference}`,
+    };
+  }
+
+  // The return leg of maker-checker. Without these three the author submits into
+  // silence: approved, sent back for changes and actually-sent all landed
+  // nowhere, so the only way to learn an outcome was to reopen the proposal.
+  if (kind === "approved") {
+    const revision = context.revisionNumber ? ` (v${context.revisionNumber})` : "";
+    const note = context.decisionNote?.trim();
+    return {
+      title: "Proposal approved",
+      body: `${reference}${clientSuffix(context)}${revision} was approved and can go to the client.${note ? ` Note: ${note}` : ""}`,
+      priority: "high",
+      actionHref,
+      dedupeKey,
+      emailSubject: `Approved: ${reference}`,
+    };
+  }
+
+  if (kind === "changes_requested") {
+    const note = context.decisionNote?.trim();
+    return {
+      title: "Changes requested on your proposal",
+      // The note is the entire point of this event — it is what the author has
+      // to act on, so it leads rather than trailing the reference.
+      body: `${note ? `"${note}" — on ` : "Changes were requested on "}${reference}${clientSuffix(context)}.`,
+      // Blocks the deal until the author acts, so it outranks an approval.
+      priority: "high",
+      actionHref,
+      dedupeKey,
+      emailSubject: `Changes requested: ${reference}`,
+    };
+  }
+
+  if (kind === "sent") {
+    const worth = value ? ` Value: ${value}.` : "";
+    return {
+      title: "Proposal sent to the client",
+      body: `${reference}${clientSuffix(context)} is now in front of the client.${worth}`,
+      // News, not a task: it starts the follow-up clock rather than demanding
+      // anything right now.
+      priority: "medium",
+      actionHref,
+      dedupeKey,
+      emailSubject: `Sent: ${reference}`,
     };
   }
 

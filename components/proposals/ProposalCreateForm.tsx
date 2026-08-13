@@ -16,20 +16,36 @@ import {
 } from "@/lib/proposals/client-codes";
 import { ProposalTemplatePicker, transactionTypeOptionPrefix } from "./ProposalTemplatePicker";
 
-interface ClientOption {
+export interface ClientOption {
   id: string;
   name: string;
   /** The proposal moniker (HUN); null until someone assigns it. */
   client_code?: string | null;
 }
 
-export function ProposalCreateForm({ clients }: { clients: ClientOption[] }) {
+export function ProposalCreateForm({
+  clients,
+  lockedClientId,
+}: {
+  clients: ClientOption[];
+  /**
+   * Mounts the form already bound to one company, for the client record: the
+   * picker is replaced by that company's name so a proposal opened from a
+   * record cannot be written against a different one. `clients` is still the
+   * full list, because the code suggestion has to know which codes are taken.
+   */
+  lockedClientId?: string;
+}) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [templateId, setTemplateId] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [codeDraft, setCodeDraft] = useState("");
+  const [clientId, setClientId] = useState(lockedClientId ?? "");
+
+  const takenCodes = useMemo(
+    () => clients.map((client) => (client.client_code ?? "").trim()).filter((code) => code !== ""),
+    [clients],
+  );
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === clientId) ?? null,
@@ -38,10 +54,14 @@ export function ProposalCreateForm({ clients }: { clients: ClientOption[] }) {
   const existingCode = (selectedClient?.client_code ?? "").trim().toUpperCase();
   const needsCode = selectedClient !== null && existingCode === "";
 
-  const takenCodes = useMemo(
-    () => clients.map((client) => (client.client_code ?? "").trim()).filter((code) => code !== ""),
-    [clients],
-  );
+  // A locked company needs its code suggestion at first paint — there is no
+  // picker change to trigger one.
+  const [codeDraft, setCodeDraft] = useState(() => {
+    if (!lockedClientId) return "";
+    const locked = clients.find((client) => client.id === lockedClientId);
+    if (!locked || (locked.client_code ?? "").trim() !== "") return "";
+    return suggestClientCode(locked.name, takenCodes);
+  });
 
   function handleClientChange(nextId: string) {
     setClientId(nextId);
@@ -117,10 +137,11 @@ export function ProposalCreateForm({ clients }: { clients: ClientOption[] }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
-      <h2>New proposal</h2>
+      <h2>{lockedClientId ? `New proposal for ${selectedClient?.name ?? "this company"}` : "New proposal"}</h2>
       <p style={{ color: "var(--portal-muted)", marginTop: 4, fontSize: "0.9rem" }}>
-        Start a proposal and assign it to a company — then build it out in the Proposal &amp; Billing Generator, revision
-        by revision.
+        {lockedClientId
+          ? "Start a proposal for this company — then build it out in the Proposal & Billing Generator, revision by revision."
+          : "Start a proposal and assign it to a company — then build it out in the Proposal & Billing Generator, revision by revision."}
       </p>
       {error ? <div className="success-box portal-alert portal-alert-error" style={{ marginTop: 12 }}>{error}</div> : null}
 
@@ -137,23 +158,28 @@ export function ProposalCreateForm({ clients }: { clients: ClientOption[] }) {
           />
         </div>
         <ProposalTemplatePicker value={templateId} onChange={setTemplateId} disabled={submitting} />
-        <div className="field">
-          <label htmlFor="client_id">Company</label>
-          <select
-            id="client_id"
-            name="client_id"
-            value={clientId}
-            onChange={(event) => handleClientChange(event.target.value)}
-          >
-            <option value="">Unassigned</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.client_code ? ` (${c.client_code})` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
+        {lockedClientId ? (
+          // Bound to the record it was opened from, so the company cannot drift.
+          <input name="client_id" type="hidden" value={lockedClientId} />
+        ) : (
+          <div className="field">
+            <label htmlFor="client_id">Company</label>
+            <select
+              id="client_id"
+              name="client_id"
+              value={clientId}
+              onChange={(event) => handleClientChange(event.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.client_code ? ` (${c.client_code})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {needsCode ? (
           <div className="field">
             <label htmlFor="client_code">Proposal code for {selectedClient?.name}</label>
