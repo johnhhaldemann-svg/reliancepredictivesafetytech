@@ -19,6 +19,10 @@ import {
   type ClientTrainingEventRow,
 } from "@/components/clients/ClientRelatedPanels";
 import type { ClientMeetingRow, ClientProposalRow } from "@/lib/clients/related";
+import {
+  ProposalCreateForm,
+  type ClientOption as ProposalClientOption,
+} from "@/components/proposals/ProposalCreateForm";
 import { createClient } from "@/lib/supabase/server";
 
 type ClientDetailPageProps = {
@@ -28,6 +32,9 @@ type ClientDetailPageProps = {
 /** Same convention as lib/files/access.ts, for tables absent from the types. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LooseClient = any;
+
+/** Bounds the code-uniqueness sample; mirrors the proposals list's own cap. */
+const clientCodeSampleLimit = 500;
 
 export default async function ClientDetailPage({ params }: ClientDetailPageProps) {
   const { id } = await params;
@@ -54,6 +61,7 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
     { data: files, count: fileCount },
     { data: meetings },
     { data: trainingEvents },
+    { data: clientOptions },
   ] = await Promise.all([
       supabase.from("company_sales_activities").select("*").eq("client_id", id).order("created_at", { ascending: false }),
       supabase.from("client_onboarding_items").select("*").eq("client_id", id).order("sort_order"),
@@ -100,6 +108,10 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
         .eq("client_id", id)
         .order("scheduled_start_at", { ascending: false })
         .limit(6),
+      // Every company's code, not just this one's: writing the first proposal
+      // for a company assigns its code, and the suggestion has to know which
+      // codes are already taken to avoid proposing a duplicate.
+      supabase.from("company_clients").select("id, name, client_code").order("name").limit(clientCodeSampleLimit),
     ]);
 
   return (
@@ -152,6 +164,16 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
         proposals={(proposals ?? []) as ClientProposalRow[]}
         trainingEvents={(trainingEvents ?? []) as ClientTrainingEventRow[]}
       />
+
+      {/* Writing a proposal was the one thing this record pointed at another
+          module to do. Bound to this company, so the proposal cannot be opened
+          here and written against a different one. */}
+      <div id="new-proposal" style={{ marginTop: 20 }}>
+        <ProposalCreateForm
+          clients={(clientOptions ?? []) as ProposalClientOption[]}
+          lockedClientId={client.id as string}
+        />
+      </div>
     </>
   );
 }

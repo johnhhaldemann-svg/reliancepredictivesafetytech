@@ -88,7 +88,7 @@ export function ClientRelatedPanels({
             <h3>Proposals</h3>
             {proposals.length === 0 ? (
               <div className="empty-state">
-                No proposals yet. <Link href="/employee/proposals">Open the proposals module</Link> to write one.
+                No proposals yet. <Link href="#new-proposal">Write the first one</Link> without leaving this page.
               </div>
             ) : (
               <>
