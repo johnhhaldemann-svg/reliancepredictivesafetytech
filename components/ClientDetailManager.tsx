@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Download, FileSignature, Plus, Save, UploadCloud } from "lucide-react";
+import { updateOnboardingItem as saveOnboardingItem } from "@/app/employee/clients/[id]/actions";
 import {
   checklistStatuses,
   lifecycleStages,
@@ -66,6 +68,8 @@ export function ClientDetailManager({
   const readyForActive = activeApprovalComplete && contractSigned;
   const currentStageItems = currentItems.filter((item) => item.lifecycle_stage === currentClient.lifecycle_stage);
   const currentStageRequirements = requirements.filter((requirement) => requirement.lifecycle_stage === currentClient.lifecycle_stage);
+
+  const router = useRouter();
 
   const groupedItems = useMemo(() => {
     return currentItems.reduce<Record<string, ClientOnboardingItem[]>>((accumulator, item) => {
@@ -329,9 +333,30 @@ export function ClientDetailManager({
     };
 
     setCurrentItems((current) => current.map((currentItem) => (currentItem.id === item.id ? { ...currentItem, ...nextPatch } : currentItem)));
-    const supabase = createClient();
-    if (supabase) {
-      await supabase.from("client_onboarding_items").update(nextPatch).eq("id", item.id);
+
+    // Server Action rather than a browser write: completing an item is what
+    // moves the company's pipeline stage, and that cannot live somewhere the
+    // caller could skip it. It also gets the change an audit trail it never had.
+    const result = await saveOnboardingItem(item.id, {
+      status: patch.status,
+      owner: patch.owner,
+      due_date: patch.due_date,
+      notes: patch.notes,
+      completed: nextPatch.completed ?? undefined,
+    });
+
+    if (!result.ok) {
+      // Put the row back the way it was — the optimistic edit did not stick.
+      setCurrentItems((current) =>
+        current.map((currentItem) => (currentItem.id === item.id ? item : currentItem)),
+      );
+      setStatusMessage(result.error ?? "Could not update that checklist item.", "error");
+      return;
+    }
+
+    if (result.advancedTo) {
+      setStatusMessage(`Checklist updated — company moved to ${result.advancedTo}.`);
+      router.refresh();
     }
   }
 

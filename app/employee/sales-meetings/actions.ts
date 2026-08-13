@@ -3,6 +3,11 @@
 import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { SalesMeetingInviteEmail } from "@/emails/sales-meeting-invite";
+import {
+  demoCompletedLifecycleStage,
+  demoScheduledLifecycleStage,
+} from "@/lib/clients/lifecycle";
+import { advanceClientStage } from "@/lib/clients/lifecycle-server";
 import { COMPANY_NAME } from "@/lib/company-data";
 import { getResendClient, NOTIFICATION_FROM } from "@/lib/email/resend";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -298,6 +303,13 @@ export async function createSalesMeetingInvite(input: SalesMeetingInviteInput): 
   if (meetingError || !meeting) {
     throw new Error(meetingError?.message ?? "Could not create sales meeting.");
   }
+
+  // Booking the demo IS the Demo Scheduled stage. The table has always stored
+  // client_id; nothing ever read it to move the pipeline, so the board only
+  // advanced when somebody remembered to drag the card. Forward-only, so a
+  // company already past this stage is not dragged back by a later call, and
+  // best-effort: the meeting exists either way.
+  await advanceClientStage(admin, meeting.client_id, demoScheduledLifecycleStage);
 
   await upsertEmployeeParticipant(admin, meeting as SalesMeeting, user);
 
@@ -681,10 +693,11 @@ export async function endSalesMeeting(meetingId: string) {
   await getAuthorizedEmployee();
   const admin = getAdminClient();
   const now = new Date().toISOString();
-  const { error } = await admin
+  const { data: ended, error } = await admin
     .from("sales_video_meetings")
     .update({ status: "ended", ended_at: now })
-    .eq("id", cleanText(meetingId));
+    .eq("id", cleanText(meetingId))
+    .select("client_id");
 
   if (error) {
     throw new Error(error.message);
@@ -701,6 +714,12 @@ export async function endSalesMeeting(meetingId: string) {
     })
     .eq("meeting_id", cleanText(meetingId))
     .neq("status", "left");
+
+  // The demo actually happened. Only ending the meeting proves that — a booked
+  // call that nobody joined never reaches here, so Demo Completed stays honest
+  // rather than being implied by the calendar sliding past.
+  const clientId = Array.isArray(ended) && ended.length > 0 ? (ended[0] as { client_id: string | null }).client_id : null;
+  await advanceClientStage(admin, clientId, demoCompletedLifecycleStage);
 }
 
 export async function revokeSalesMeetingInvite(inviteId: string) {

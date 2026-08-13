@@ -27,6 +27,8 @@ export type LifecycleStage = (typeof lifecycleStages)[number];
  * would quietly stop advancing anything.
  */
 export const proposalSentLifecycleStage: LifecycleStage = "Proposal Sent";
+export const demoScheduledLifecycleStage: LifecycleStage = "Demo Scheduled";
+export const demoCompletedLifecycleStage: LifecycleStage = "Demo Completed";
 
 /**
  * Position in the pipeline, or -1 when the stage is not one of the twelve.
