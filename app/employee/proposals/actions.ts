@@ -631,6 +631,22 @@ export async function decideProposal(proposalId: string, input: DecideProposalIn
     { decision: input.decision, revision_number: proposal.current_revision, note: note.value },
   );
 
+  // The return leg of the handoff. Submitting for review has always notified the
+  // approver; the answer notified nobody, so the author learned the outcome only
+  // by reopening the proposal. Excludes the decider — this is news for the other
+  // side. Best-effort, exactly like the submit notification: the decision stands
+  // if the message fails.
+  await notifyProposalEventById(
+    input.decision === "approved" ? "approved" : "changes_requested",
+    proposalId,
+    {
+      channel: "employee",
+      revisionNumber: Number(proposal.current_revision ?? 1),
+      decisionNote: note.value,
+    },
+    { excludeUserId: userId },
+  );
+
   revalidateProposals(proposalId);
   return { ok: true };
 }
@@ -960,6 +976,13 @@ export async function setProposalStatus(
       },
       { excludeUserId: userId },
     );
+  }
+
+  // The moment the document actually reaches the client. Only the approver can
+  // send, so the author — who wrote it and handed it over — had no way to know
+  // their work went out, and nothing to start the follow-up clock from.
+  if (status === "sent") {
+    await notifyProposalEventById("sent", proposalId, { channel: "employee" }, { excludeUserId: userId });
   }
 
   revalidateProposals(proposalId);

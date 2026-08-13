@@ -35,6 +35,9 @@ const UNIQUE_VIOLATION = "23505";
 
 const EVENT_LABELS: Record<ProposalEventKind, string> = {
   submitted_for_review: "Awaiting approval",
+  approved: "Approved",
+  changes_requested: "Changes requested",
+  sent: "Sent to client",
   accepted: "Accepted",
   declined: "Declined",
 };
