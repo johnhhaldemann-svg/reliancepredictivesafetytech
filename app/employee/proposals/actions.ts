@@ -60,6 +60,8 @@ import { notifyProposalEventById } from "@/lib/proposals/notifications-server";
 import { recordAcceptanceIncome } from "@/lib/proposals/acceptance-income";
 import { sendProposalForDocusign } from "@/lib/proposals/docusign";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
+import { proposalSentLifecycleStage } from "@/lib/clients/lifecycle";
+import { advanceClientStage } from "@/lib/clients/lifecycle-server";
 
 export interface ActionResult {
   ok: boolean;
@@ -843,7 +845,7 @@ export async function setProposalStatus(
 
   const { data: proposal } = await supabase
     .from("client_proposals")
-    .select("id, status, title, current_revision")
+    .select("id, status, title, current_revision, client_id")
     .eq("id", proposalId)
     .maybeSingle();
   if (!proposal) return { ok: false, error: NO_ROWS_MESSAGE };
@@ -983,6 +985,26 @@ export async function setProposalStatus(
   // their work went out, and nothing to start the follow-up clock from.
   if (status === "sent") {
     await notifyProposalEventById("sent", proposalId, { channel: "employee" }, { excludeUserId: userId });
+
+    // The company is now, by definition, at Proposal Sent. This stage used to
+    // move only when somebody remembered to drag the card, which is why a board
+    // could show First Pitch for a company holding a live quote. Best-effort and
+    // forward-only: a company already past this stage is left where it is, and a
+    // bookkeeping failure must not turn into a failed send.
+    const staged = await advanceClientStage(supabase, proposal.client_id, proposalSentLifecycleStage);
+    if (staged.error) {
+      await recordAuditEvent({
+        ...buildDataAuditEvent(
+          "update",
+          "client_proposal",
+          proposalId,
+          userId,
+          `Sent proposal "${proposal.title}" but the client's pipeline stage could not be advanced: ${staged.error}`,
+        ),
+        severity: "warn",
+        actor_role: role,
+      });
+    }
   }
 
   revalidateProposals(proposalId);

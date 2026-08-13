@@ -18,6 +18,7 @@ import "server-only";
 // rows gets none added, so a redelivered webhook, a retried acceptance, or a
 // proposal reopened and re-accepted cannot bill the client twice.
 
+import { advanceClientStage } from "@/lib/clients/lifecycle-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGeneratorState } from "@/lib/proposals/generator-state";
 import { computeProposalTotals } from "@/lib/proposals/pricing";
@@ -31,19 +32,6 @@ type LooseClient = any;
 
 /** The lifecycle stage a won deal belongs in (lib/company-data.ts). */
 export const wonLifecycleStage = "Signed / Won";
-
-/**
- * Stages at or past "won". Reached this far, the client's stage is not walked
- * backwards by a later acceptance — a company already Onboarding must not be
- * dragged back to Signed / Won because a second proposal closed.
- */
-const STAGES_AT_OR_PAST_WON = new Set([
-  wonLifecycleStage,
-  "Onboarding",
-  "Pilot / Setup",
-  "Active Company",
-  "Renewal / Expansion",
-]);
 
 /** Finance category these rows land under (lib/company-data.ts). */
 const INCOME_CATEGORY = "Sales / Revenue";
@@ -144,7 +132,7 @@ export async function recordAcceptanceIncome(
       created = Array.isArray(inserted) ? inserted.length : 0;
     }
 
-    const advancedStage = clientId ? await advanceClientStage(db, clientId) : false;
+    const advancedStage = (await advanceClientStage(db, clientId, wonLifecycleStage)).advanced;
 
     if (created > 0 || advancedStage) {
       await recordAuditEvent({
@@ -171,26 +159,3 @@ export async function recordAcceptanceIncome(
   }
 }
 
-/** Moves the client to the won stage unless they are already at or past it. */
-async function advanceClientStage(db: LooseClient, clientId: string): Promise<boolean> {
-  const { data: client } = await db
-    .from("company_clients")
-    .select("lifecycle_stage")
-    .eq("id", clientId)
-    .maybeSingle();
-  if (!client) return false;
-
-  const current = (client.lifecycle_stage as string | null) ?? "";
-  if (STAGES_AT_OR_PAST_WON.has(current)) return false;
-
-  const { data: updated } = await db
-    .from("company_clients")
-    .update({ lifecycle_stage: wonLifecycleStage })
-    .eq("id", clientId)
-    // Conditional on what was read, so this cannot overwrite a stage someone
-    // set by hand between the read and the write.
-    .eq("lifecycle_stage", current)
-    .select("id");
-
-  return Array.isArray(updated) && updated.length > 0;
-}

@@ -15,6 +15,9 @@ vi.mock("@/lib/proposals/acceptance-income", () => ({
 vi.mock("@/lib/proposals/notifications-server", () => ({
   notifyProposalEventById: vi.fn(async () => ({ ok: true, notified: 1, emailed: 1 })),
 }));
+vi.mock("@/lib/clients/lifecycle-server", () => ({
+  advanceClientStage: vi.fn(async () => ({ advanced: true })),
+}));
 
 import { revalidatePath } from "next/cache";
 import { getProposalAccess } from "@/lib/proposals/access";
@@ -22,6 +25,7 @@ import { recordAuditEvent } from "@/lib/audit/events";
 import { fileAcceptedProposalPdf } from "@/lib/proposals/acceptance-filing";
 import { recordAcceptanceIncome } from "@/lib/proposals/acceptance-income";
 import { notifyProposalEventById } from "@/lib/proposals/notifications-server";
+import { advanceClientStage } from "@/lib/clients/lifecycle-server";
 import { resolveProposalRoleFlags } from "@/lib/proposals/policy";
 import { isGeneratorState, type GeneratorState } from "@/lib/proposals/generator-state";
 import { phaseOptions } from "@/lib/proposals/catalog";
@@ -47,6 +51,7 @@ const revalidateMock = vi.mocked(revalidatePath);
 const filingMock = vi.mocked(fileAcceptedProposalPdf);
 const incomeMock = vi.mocked(recordAcceptanceIncome);
 const notifyMock = vi.mocked(notifyProposalEventById);
+const advanceStageMock = vi.mocked(advanceClientStage);
 
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "22222222-2222-4222-8222-222222222222";
@@ -1015,6 +1020,18 @@ describe("acceptance filing", () => {
     expect(incomeMock).not.toHaveBeenCalled();
   });
 
+  it("leaves the stage alone on a transition that is not a send", async () => {
+    const supabase = createSupabaseMock({
+      "client_proposals:select": { data: proposal({ status: "draft" }) },
+      "client_proposals:update": { data: [{ id: PROPOSAL_ID }] },
+    });
+    signIn("employee", supabase);
+
+    await setProposalStatus(PROPOSAL_ID, "in_review");
+
+    expect(advanceStageMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the acceptance and audits a warning when the income schedule fails", async () => {
     incomeMock.mockResolvedValueOnce({ ok: false, error: "finance offline" });
     const supabase = createSupabaseMock({
@@ -1160,6 +1177,39 @@ describe("decideProposal", () => {
     const update = supabase.calls.find((call) => call.table === "client_proposals" && call.op === "update");
     expect(update?.payload).toEqual({ status: "draft" });
   });
+
+  // The return leg. The author used to be told nothing at all — the note was
+  // written to the approvals table and rendered only on the proposal's own page.
+  it("carries the reviewer's note back to the author when changes are requested", async () => {
+    const supabase = createSupabaseMock({
+      "client_proposals:select": { data: proposal({ status: "in_review" }) },
+      "client_proposal_revisions:select": { data: { id: "rev-3", revision_number: 3 } },
+      "client_proposal_approvals:insert": { data: [{ id: "decision-1" }] },
+      "client_proposals:update": { data: [{ id: PROPOSAL_ID }] },
+    });
+    signIn("super_admin", supabase, APPROVER);
+
+    await decideProposal(PROPOSAL_ID, { decision: "changes_requested", note: "Fix the pricing table." });
+
+    const call = notifyMock.mock.calls.find((entry) => entry[0] === "changes_requested");
+    expect(call).toBeDefined();
+    expect(call?.[2]).toMatchObject({ decisionNote: "Fix the pricing table." });
+    // News for the other side, not an echo back to whoever just decided.
+    expect(call?.[3]).toMatchObject({ excludeUserId: "user-1" });
+  });
+
+  it("tells the author when their proposal is approved", async () => {
+    const supabase = createSupabaseMock({
+      "client_proposals:select": { data: proposal({ status: "in_review" }) },
+      "client_proposal_revisions:select": { data: { id: "rev-3", revision_number: 3 } },
+      "client_proposal_approvals:insert": { data: [{ id: "decision-1" }] },
+    });
+    signIn("super_admin", supabase, APPROVER);
+
+    await decideProposal(PROPOSAL_ID, { decision: "approved" });
+
+    expect(notifyMock.mock.calls.some((entry) => entry[0] === "approved")).toBe(true);
+  });
 });
 
 describe("the send gate", () => {
@@ -1211,6 +1261,40 @@ describe("the send gate", () => {
     expect(await setProposalStatus(PROPOSAL_ID, "sent")).toEqual({ ok: true });
     const update = supabase.calls.find((call) => call.op === "update");
     expect(update?.payload).toEqual({ status: "sent" });
+  });
+
+  // The board used to go stale here: a company could sit at First Pitch while
+  // holding a live quote, until somebody remembered to drag the card.
+  it("advances the company to Proposal Sent once the document goes out", async () => {
+    const supabase = sendScenario({ approvals: [approvalRow({ revision_number: 3 })], currentRevision: 3 });
+    signIn("super_admin", supabase, APPROVER);
+
+    expect(await setProposalStatus(PROPOSAL_ID, "sent")).toEqual({ ok: true });
+    expect(advanceStageMock).toHaveBeenCalledTimes(1);
+    expect(advanceStageMock.mock.calls[0][2]).toBe("Proposal Sent");
+  });
+
+  // The send is the business event; the stage only reflects it.
+  it("still reports the send as successful when the stage cannot be advanced", async () => {
+    advanceStageMock.mockResolvedValueOnce({ advanced: false, error: "clients table offline" });
+    const supabase = sendScenario({ approvals: [approvalRow({ revision_number: 3 })], currentRevision: 3 });
+    signIn("super_admin", supabase, APPROVER);
+
+    expect(await setProposalStatus(PROPOSAL_ID, "sent")).toEqual({ ok: true });
+    const warning = auditMock.mock.calls.map((call) => call[0]).find((event) => event.severity === "warn");
+    expect(warning?.summary).toContain("pipeline stage could not be advanced");
+  });
+
+  // The author handed the document over and could not see what happened to it.
+  it("tells the other side the document reached the client", async () => {
+    const supabase = sendScenario({ approvals: [approvalRow({ revision_number: 3 })], currentRevision: 3 });
+    signIn("super_admin", supabase, APPROVER);
+
+    await setProposalStatus(PROPOSAL_ID, "sent");
+
+    const sentCall = notifyMock.mock.calls.find((call) => call[0] === "sent");
+    expect(sentCall).toBeDefined();
+    expect(sentCall?.[3]).toMatchObject({ excludeUserId: "user-1" });
   });
 
   it("leaves every other transition alone", async () => {
