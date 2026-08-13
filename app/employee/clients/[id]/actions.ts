@@ -18,6 +18,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
+import { advanceClientStage } from "@/lib/clients/lifecycle-server";
+import {
+  isValidChecklistStatus,
+  resolveChecklistCompletion,
+  shouldAdvanceOnCompletion,
+} from "@/lib/clients/onboarding";
 import { clientCodeRule, isValidClientCode, normalizeClientCode } from "@/lib/proposals/client-codes";
 
 export interface CompanyActionResult {
@@ -414,4 +420,107 @@ export async function deleteCompanyContact(
 
   revalidateCompany(clientId);
   return { ok: true };
+}
+
+/** The fields the checklist UI is allowed to change on an item. */
+export interface OnboardingItemPatch {
+  status?: string;
+  owner?: string | null;
+  due_date?: string | null;
+  notes?: string | null;
+  completed?: boolean;
+}
+
+/**
+ * Updates a checklist item and lets it move the company's pipeline stage.
+ *
+ * Every row in client_onboarding_items carries its own `lifecycle_stage` — it
+ * has been `not null` since the table was created — and nothing ever read it.
+ * So "First pitch completed", "NDA signed" and "Billing setup confirmed" were
+ * ticked by a human who then had to go and drag a card to say the same thing
+ * again. Completing the item now IS the statement that the company reached that
+ * stage. This is the only route to First Pitch and Legal Review, which no other
+ * system event produces.
+ *
+ * Also moves the write server-side. This was a direct browser update with no
+ * audit trail (CLAUDE.md forbids client-side mutation), and stage advancement
+ * has to happen where it cannot be skipped by whoever calls it.
+ */
+export async function updateOnboardingItem(
+  itemId: string,
+  patch: OnboardingItemPatch,
+): Promise<CompanyActionResult & { advancedTo?: string }> {
+  if (!UUID.test(itemId)) return { ok: false, error: "Missing checklist item id." };
+
+  const { supabase, userId } = await requireEmployee();
+  if (!supabase || !userId) return { ok: false, error: "You must be signed in." };
+
+  const { data: item, error: readError } = await supabase
+    .from("client_onboarding_items")
+    .select("id, client_id, title, lifecycle_stage, status, completed")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!item) {
+    return { ok: false, error: "That checklist item was not found, or you do not have permission to change it." };
+  }
+
+  const status = typeof patch.status === "string" ? patch.status : undefined;
+  if (status !== undefined && !isValidChecklistStatus(status)) {
+    return { ok: false, error: "Unknown checklist status." };
+  }
+
+  const nextStatus = status ?? (item.status as string);
+  const nextCompleted = resolveChecklistCompletion({
+    nextStatus,
+    patchCompleted: patch.completed,
+    currentCompleted: item.completed as boolean | null,
+  });
+
+  // Whitelisted rather than spread, so a caller cannot post arbitrary columns
+  // at a public Server Action endpoint.
+  const update: {
+    completed: boolean;
+    status?: string;
+    owner?: string | null;
+    due_date?: string | null;
+    notes?: string | null;
+  } = { completed: nextCompleted };
+  if (status !== undefined) update.status = status;
+  if (patch.owner !== undefined) update.owner = text(patch.owner) || null;
+  if (patch.due_date !== undefined) update.due_date = text(patch.due_date) || null;
+  if (patch.notes !== undefined) update.notes = text(patch.notes) || null;
+
+  const { data: updated, error } = await supabase
+    .from("client_onboarding_items")
+    .update(update)
+    .eq("id", itemId)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!updated || updated.length === 0) {
+    return { ok: false, error: "That checklist item was not found, or you do not have permission to change it." };
+  }
+
+  let advancedTo: string | undefined;
+  if (shouldAdvanceOnCompletion(item.completed as boolean | null, nextCompleted)) {
+    const stage = (item.lifecycle_stage as string | null) ?? "";
+    const staged = await advanceClientStage(supabase, item.client_id as string, stage);
+    if (staged.advanced) advancedTo = stage;
+  }
+
+  await recordAuditEvent({
+    ...buildDataAuditEvent(
+      "update",
+      "client_onboarding_items",
+      itemId,
+      userId,
+      `Updated checklist item "${item.title as string}"` +
+        (advancedTo ? ` and moved the company to ${advancedTo}` : ""),
+      { status: item.status, completed: item.completed },
+      { ...update, advanced_to: advancedTo ?? null },
+    ),
+  });
+
+  revalidateCompany(item.client_id as string);
+  return { ok: true, advancedTo };
 }
