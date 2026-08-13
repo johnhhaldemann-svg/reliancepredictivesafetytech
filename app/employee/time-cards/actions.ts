@@ -6,6 +6,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { isPortalAdminRole, isPortalOwnerRole, isPortalSuperAdminRole } from "@/lib/user-management";
+import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
+import {
+  canReviewTimeCard,
+  computePaidValue,
+  validateHourlyRate,
+  validatePayrollHours,
+} from "@/lib/payroll/policy";
 
 type EmployeeTimeCard = Database["public"]["Tables"]["employee_time_cards"]["Row"];
 type EmployeeTimeEntry = Database["public"]["Tables"]["employee_time_entries"]["Row"];
@@ -342,16 +349,49 @@ export async function reviewEmployeeTimeCard(input: {
     return { data: null, error: "Only super admins can approve or reject time cards." };
   }
 
+  const timeCardId = cleanText(input.timeCardId);
+
+  // Once a card's hours are inside a payroll run its approval is load-bearing:
+  // un-approving it would leave the run holding money for a card the platform
+  // no longer considers approved, and nothing downstream would notice.
+  const { data: payrollUse } = await admin
+    .from("employee_payroll_run_items")
+    .select("id")
+    .eq("time_card_id", timeCardId)
+    .limit(1);
+
+  const gate = canReviewTimeCard(Array.isArray(payrollUse) && payrollUse.length > 0);
+  if (!gate.ok) return { data: null, error: gate.reason ?? "This time card can no longer be re-decided." };
+
+  const { data: before } = await admin
+    .from("employee_time_cards")
+    .select("status")
+    .eq("id", timeCardId)
+    .maybeSingle();
+
   const { data, error } = await admin
     .from("employee_time_cards")
     .update({ status: input.status, review_notes: cleanText(input.reviewNotes) || null, reviewed_by: user.id })
-    .eq("id", cleanText(input.timeCardId))
+    .eq("id", timeCardId)
     .select("*")
     .single();
 
   if (error) {
     return { data: null, error: error.message };
   }
+
+  await recordAuditEvent({
+    ...buildDataAuditEvent(
+      "update",
+      "employee_time_card",
+      timeCardId,
+      user.id,
+      `${input.status === "approved" ? "Approved" : "Rejected"} time card ${timeCardId}`,
+      before ?? null,
+      { status: input.status },
+    ),
+    severity: "warn",
+  });
 
   revalidatePath("/employee/time-cards");
   return { data, error: null };
@@ -403,24 +443,48 @@ export async function updateTimeCardPayrollRate(input: {
     return { data: null, error: "Only owners can update payroll rates." };
   }
 
-  const hourlyRate = Number(input.hourlyRate);
-  const totalHours = Number(input.totalHours);
+  // Both figures are validated now. Previously only the rate was checked, so a
+  // negative, blank or NaN hours value multiplied straight into paid_value.
+  const rateCheck = validateHourlyRate(input.hourlyRate);
+  if (!rateCheck.ok) return { data: null, error: rateCheck.reason ?? "Enter a valid hourly rate." };
 
-  if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
-    return { data: null, error: "Enter a valid hourly rate." };
-  }
+  const hoursCheck = validatePayrollHours(input.totalHours);
+  if (!hoursCheck.ok) return { data: null, error: hoursCheck.reason ?? "Enter valid hours." };
 
-  const paidValue = Number((hourlyRate * totalHours).toFixed(2));
+  const hourlyRate = rateCheck.value!;
+  const totalHours = hoursCheck.value!;
+  const timeCardId = cleanText(input.timeCardId);
+
+  const { data: existing } = await admin
+    .from("employee_time_card_payroll")
+    .select("hourly_rate, total_hours, paid_value")
+    .eq("time_card_id", timeCardId)
+    .maybeSingle();
+
+  const paidValue = computePaidValue(hourlyRate, totalHours);
   const { data, error } = await admin
     .from("employee_time_card_payroll")
     .update({ hourly_rate: hourlyRate, paid_value: paidValue })
-    .eq("time_card_id", cleanText(input.timeCardId))
+    .eq("time_card_id", timeCardId)
     .select("*")
     .single();
 
   if (error) {
     return { data: null, error: error.message };
   }
+
+  await recordAuditEvent({
+    ...buildDataAuditEvent(
+      "update",
+      "employee_time_card_payroll",
+      timeCardId,
+      user.id,
+      `Set pay rate on time card ${timeCardId} to ${hourlyRate}/hr for ${totalHours} hours (${paidValue})`,
+      existing ?? null,
+      { hourly_rate: hourlyRate, total_hours: totalHours, paid_value: paidValue },
+    ),
+    severity: "warn",
+  });
 
   revalidatePath("/employee/time-cards");
   return { data, error: null };

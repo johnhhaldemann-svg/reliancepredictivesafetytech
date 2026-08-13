@@ -6,6 +6,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { isPortalOwnerRole } from "@/lib/user-management";
+import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
+import {
+  canMarkPayrollRunPaid,
+  canMutatePayrollRunItem,
+  canSetPayrollRunStatus,
+  isPayrollItemStatus,
+  payrollItemStatuses,
+  payrollRunStatuses,
+} from "@/lib/payroll/policy";
 
 type EmployeeTimeCard = Database["public"]["Tables"]["employee_time_cards"]["Row"];
 type EmployeeTimeCardPayroll = Database["public"]["Tables"]["employee_time_card_payroll"]["Row"];
@@ -19,9 +28,6 @@ type PayrollRunPayload = {
   run: EmployeePayrollRun;
   items: EmployeePayrollRunItem[];
 };
-
-const payrollRunStatuses = ["draft", "ready", "paid", "held"];
-const payrollItemStatuses = ["ready", "paid", "held"];
 
 function cleanText(value: unknown) {
   return String(value ?? "").trim();
@@ -87,6 +93,26 @@ function getAdminClientOrError() {
 function revalidatePayroll() {
   revalidatePath("/employee/payroll");
   revalidatePath("/employee");
+}
+
+/**
+ * Wages move money, so every action here leaves a record. Until now none of
+ * them did — this was the only money surface in the platform with no audit
+ * trail, which meant a wrong figure could not be reconstructed after the fact.
+ */
+async function recordPayrollAudit(
+  action: "create" | "update",
+  entity: "employee_payroll_run" | "employee_payroll_run_item",
+  entityId: string,
+  userId: string,
+  summary: string,
+  before?: Record<string, unknown> | null,
+  after?: Record<string, unknown> | null,
+) {
+  await recordAuditEvent({
+    ...buildDataAuditEvent(action, entity, entityId, userId, summary, before, after),
+    severity: "warn",
+  });
 }
 
 function validatePeriod(periodStart: string, periodEnd: string) {
@@ -190,6 +216,21 @@ export async function createPayrollRun(input: {
     return { data: null, error: itemsError.message };
   }
 
+  await recordPayrollAudit(
+    "create",
+    "employee_payroll_run",
+    run.id,
+    owner.user.id,
+    `Created payroll run for ${periodStart} to ${periodEnd} with ${items?.length ?? 0} time cards`,
+    null,
+    {
+      period_start: periodStart,
+      period_end: periodEnd,
+      items: items?.length ?? 0,
+      gross_total: itemRows.reduce((sum, row) => sum + row.gross_pay, 0),
+    },
+  );
+
   revalidatePayroll();
   return { data: { run: run as EmployeePayrollRun, items: (items ?? []) as EmployeePayrollRunItem[] }, error: null };
 }
@@ -205,13 +246,24 @@ export async function updatePayrollRun(input: {
   const { admin, error: adminError } = getAdminClientOrError();
   if (!admin) return { data: null, error: adminError };
 
+  const runId = cleanText(input.runId);
+  const { data: current } = await admin
+    .from("employee_payroll_runs")
+    .select("id, status")
+    .eq("id", runId)
+    .maybeSingle();
+  if (!current) return { data: null, error: "Payroll run not found." };
+
   const patch: Database["public"]["Tables"]["employee_payroll_runs"]["Update"] = {};
   const status = cleanText(input.status);
 
   if (status) {
-    if (!payrollRunStatuses.includes(status) || status === "paid") {
-      return { data: null, error: "Choose a valid payroll run status." };
-    }
+    // Refuses an unknown status, refuses "paid" (that goes through
+    // markPayrollRunPaid so the payment is stamped), and refuses ANY edit to a
+    // run already paid — which previously would have moved it back to draft and
+    // nulled paid_at/paid_by, erasing the evidence it was ever paid.
+    const gate = canSetPayrollRunStatus(current.status, status);
+    if (!gate.ok) return { data: null, error: gate.reason ?? "This status change is not allowed." };
     patch.status = status;
     patch.paid_at = null;
     patch.paid_by = null;
@@ -225,8 +277,31 @@ export async function updatePayrollRun(input: {
     return { data: null, error: "No payroll run changes were provided." };
   }
 
-  const { data, error } = await admin.from("employee_payroll_runs").update(patch).eq("id", cleanText(input.runId)).select("*").single();
+  // A notes-only edit still must not touch a paid run.
+  if (!status) {
+    const gate = canSetPayrollRunStatus(current.status, current.status);
+    if (!gate.ok) return { data: null, error: gate.reason ?? "This payroll run can no longer be edited." };
+  }
+
+  const { data, error } = await admin
+    .from("employee_payroll_runs")
+    .update(patch)
+    .eq("id", runId)
+    // Guards the read-then-write against a concurrent transition.
+    .eq("status", current.status)
+    .select("*")
+    .single();
   if (error) return { data: null, error: error.message };
+
+  await recordPayrollAudit(
+    "update",
+    "employee_payroll_run",
+    runId,
+    owner.user.id,
+    `Updated payroll run ${runId}${status ? ` (${current.status} -> ${status})` : " notes"}`,
+    { status: current.status },
+    patch as Record<string, unknown>,
+  );
 
   revalidatePayroll();
   return { data: data as EmployeePayrollRun, error: null };
@@ -242,14 +317,36 @@ export async function markPayrollRunPaid(input: {
   if (!admin) return { data: null, error: adminError };
 
   const runId = cleanText(input.runId);
+
+  // The precondition this action never had: it updated unconditionally, so a
+  // stale page or a second session could re-stamp paid_at and paid_by on a run
+  // that was already paid, and a run deliberately on hold could be paid anyway.
+  const { data: current } = await admin
+    .from("employee_payroll_runs")
+    .select("id, status")
+    .eq("id", runId)
+    .maybeSingle();
+  if (!current) return { data: null, error: "Payroll run not found." };
+
+  const gate = canMarkPayrollRunPaid(current.status);
+  if (!gate.ok) return { data: null, error: gate.reason ?? "This payroll run cannot be marked paid." };
+
   const { data: run, error: runError } = await admin
     .from("employee_payroll_runs")
     .update({ status: "paid", paid_at: new Date().toISOString(), paid_by: owner.user.id })
     .eq("id", runId)
+    // Conditional on what was read: whichever write lands first wins, so two
+    // concurrent clicks cannot both report a successful payment.
+    .eq("status", current.status)
     .select("*")
     .single();
 
-  if (runError || !run) return { data: null, error: runError?.message ?? "Payroll run could not be marked paid." };
+  if (runError || !run) {
+    return {
+      data: null,
+      error: runError?.message ?? "This payroll run changed while you were looking at it. Reload before marking it paid.",
+    };
+  }
 
   const { data: items, error: itemsError } = await admin
     .from("employee_payroll_run_items")
@@ -258,6 +355,16 @@ export async function markPayrollRunPaid(input: {
     .select("*");
 
   if (itemsError) return { data: null, error: itemsError.message };
+
+  await recordPayrollAudit(
+    "update",
+    "employee_payroll_run",
+    runId,
+    owner.user.id,
+    `Marked payroll run ${runId} paid (${items?.length ?? 0} items) for ${run.period_start} to ${run.period_end}`,
+    { status: current.status, paid_at: null },
+    { status: "paid", paid_at: run.paid_at, paid_by: owner.user.id, items: items?.length ?? 0 },
+  );
 
   revalidatePayroll();
   return { data: { run: run as EmployeePayrollRun, items: (items ?? []) as EmployeePayrollRunItem[] }, error: null };
@@ -279,12 +386,33 @@ export async function updatePayrollRunItem(input: {
   const { admin, error: adminError } = getAdminClientOrError();
   if (!admin) return { data: null, error: adminError };
 
+  const itemId = cleanText(input.itemId);
+
+  // Items inherit the freeze from the run that owns them: editing deductions on
+  // a run whose money has already gone out would silently change the record of
+  // what was paid.
+  const { data: existingItem } = await admin
+    .from("employee_payroll_run_items")
+    .select("id, payroll_run_id, item_status")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!existingItem) return { data: null, error: "Payroll item not found." };
+
+  const { data: parentRun } = await admin
+    .from("employee_payroll_runs")
+    .select("status")
+    .eq("id", existingItem.payroll_run_id)
+    .maybeSingle();
+
+  const runGate = canMutatePayrollRunItem(parentRun?.status);
+  if (!runGate.ok) return { data: null, error: runGate.reason ?? "This payroll item can no longer be edited." };
+
   const patch: Database["public"]["Tables"]["employee_payroll_run_items"]["Update"] = {};
   const itemStatus = cleanText(input.itemStatus);
 
   if (itemStatus) {
-    if (!payrollItemStatuses.includes(itemStatus)) {
-      return { data: null, error: "Choose a valid payroll item status." };
+    if (!isPayrollItemStatus(itemStatus)) {
+      return { data: null, error: `Choose a valid payroll item status (${payrollItemStatuses.join(", ")}).` };
     }
     patch.item_status = itemStatus;
   }
@@ -303,8 +431,18 @@ export async function updatePayrollRunItem(input: {
     return { data: null, error: "No payroll item changes were provided." };
   }
 
-  const { data, error } = await admin.from("employee_payroll_run_items").update(patch).eq("id", cleanText(input.itemId)).select("*").single();
+  const { data, error } = await admin.from("employee_payroll_run_items").update(patch).eq("id", itemId).select("*").single();
   if (error) return { data: null, error: error.message };
+
+  await recordPayrollAudit(
+    "update",
+    "employee_payroll_run_item",
+    itemId,
+    owner.user.id,
+    `Updated payroll item ${itemId} on run ${existingItem.payroll_run_id}`,
+    { item_status: existingItem.item_status },
+    patch as Record<string, unknown>,
+  );
 
   revalidatePayroll();
   return { data: data as EmployeePayrollRunItem, error: null };
