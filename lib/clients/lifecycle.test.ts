@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { lifecycleStages } from "@/lib/company-data";
-import { isKnownStage, shouldAdvanceStage, stageRank } from "./lifecycle";
+import {
+  demoCompletedLifecycleStage,
+  demoScheduledLifecycleStage,
+  isKnownStage,
+  proposalSentLifecycleStage,
+  shouldAdvanceStage,
+  stageRank,
+} from "./lifecycle";
 
 describe("stageRank", () => {
   it("orders the stages the way the pipeline runs", () => {
@@ -14,6 +21,34 @@ describe("stageRank", () => {
     expect(stageRank("")).toBe(-1);
     expect(stageRank(null)).toBe(-1);
     expect(stageRank(undefined)).toBe(-1);
+  });
+});
+
+/**
+ * The event-driven stage names are the one place a typo fails silently rather
+ * than loudly: shouldAdvanceStage refuses an unrecognised target, so a stale
+ * constant would simply stop advancing anything, with no error anywhere.
+ */
+describe("the stages events drive", () => {
+  it("are all real stages", () => {
+    for (const stage of [
+      proposalSentLifecycleStage,
+      demoScheduledLifecycleStage,
+      demoCompletedLifecycleStage,
+    ]) {
+      expect(isKnownStage(stage)).toBe(true);
+    }
+  });
+
+  it("sit in the order the sales process actually runs", () => {
+    expect(stageRank(demoScheduledLifecycleStage)).toBeLessThan(stageRank(demoCompletedLifecycleStage));
+    expect(stageRank(demoCompletedLifecycleStage)).toBeLessThan(stageRank(proposalSentLifecycleStage));
+  });
+
+  // Booking a second demo after a quote is out must not undo the quote.
+  it("cannot be walked backwards by a later meeting", () => {
+    expect(shouldAdvanceStage(proposalSentLifecycleStage, demoScheduledLifecycleStage)).toBe(false);
+    expect(shouldAdvanceStage("Signed / Won", demoCompletedLifecycleStage)).toBe(false);
   });
 });
 
