@@ -23,6 +23,8 @@ import {
   ProposalCreateForm,
   type ClientOption as ProposalClientOption,
 } from "@/components/proposals/ProposalCreateForm";
+import { ClientReceivablesPanel } from "@/components/clients/ClientReceivablesPanel";
+import type { RevenueIncomeRow } from "@/lib/reports/revenue";
 import { createClient } from "@/lib/supabase/server";
 
 type ClientDetailPageProps = {
@@ -49,6 +51,10 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
     notFound();
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const [
     { data: activities },
     { data: items },
@@ -62,6 +68,8 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
     { data: meetings },
     { data: trainingEvents },
     { data: clientOptions },
+    { data: financeAuthorization },
+    { data: incomeRows },
   ] = await Promise.all([
       supabase.from("company_sales_activities").select("*").eq("client_id", id).order("created_at", { ascending: false }),
       supabase.from("client_onboarding_items").select("*").eq("client_id", id).order("sort_order"),
@@ -112,6 +120,20 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
       // for a company assigns its code, and the suggestion has to know which
       // codes are already taken to avoid proposing a duplicate.
       supabase.from("company_clients").select("id, name, client_code").order("name").limit(clientCodeSampleLimit),
+      // Whether THIS viewer can see finance at all. Needed explicitly because
+      // RLS returns zero rows rather than an error to an unauthorized reader,
+      // and "no receivables" must not be shown for "you cannot see them".
+      user
+        ? supabase.from("company_finance_authorized_users").select("user_id").eq("user_id", user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      // The schedule acceptance filed, reached through the proposal it sold.
+      // !inner makes the join a filter, so this returns only rows belonging to
+      // a proposal for THIS company.
+      supabase
+        .from("company_finance_transactions")
+        .select("amount, status, transaction_date, proposal:client_proposals!inner(client_id)")
+        .eq("transaction_type", "income")
+        .eq("proposal.client_id", id),
     ]);
 
   return (
@@ -153,6 +175,12 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
         masterTemplates={(masterTemplates ?? []) as CompanyDocument[]}
         onboardingItems={(items ?? []) as ClientOnboardingItem[]}
         requirements={(requirements ?? []) as CompanyDocumentRequirement[]}
+      />
+
+      <ClientReceivablesPanel
+        canSeeFinance={Boolean(financeAuthorization)}
+        income={(incomeRows ?? []) as unknown as RevenueIncomeRow[]}
+        now={new Date()}
       />
 
       <ClientRelatedPanels
