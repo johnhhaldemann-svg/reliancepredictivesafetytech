@@ -86,7 +86,7 @@ export const documentResponseSchema = {
   required: ["title", "summary", "sections", "review_notes", "confidence_level", "disclaimer"],
 } as const;
 
-export function buildDocumentPrompt(input: DocumentBuilderInput): string {
+export function buildDocumentPrompt(input: DocumentBuilderInput, clientContextBlock?: string): string {
   const lines: string[] = [];
   const add = (label: string, value?: string) => {
     if (value === undefined || value === null || String(value).trim() === "") return;
@@ -101,7 +101,12 @@ export function buildDocumentPrompt(input: DocumentBuilderInput): string {
   add("Company standards to incorporate", input.company_standards);
   add("Additional notes", input.notes);
 
-  return `${documentSystemPrompt(input.doc_type)}
+  // The client briefing sits between the system prompt and the request, so the
+  // model reads who this is for before what is being asked. Absent when no
+  // client was chosen, in which case the prompt is exactly as it was.
+  const contextSection = clientContextBlock?.trim() ? `\n\n${clientContextBlock.trim()}` : "";
+
+  return `${documentSystemPrompt(input.doc_type)}${contextSection}
 
 DOCUMENT REQUEST:
 ${lines.join("\n")}

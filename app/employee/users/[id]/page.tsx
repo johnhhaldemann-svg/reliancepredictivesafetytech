@@ -26,6 +26,7 @@ import type {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isPortalAdminRole, isPortalSuperAdminRole, portalModuleCatalog } from "@/lib/user-management";
+import { createSignedUrlMap } from "@/lib/storage/signed-urls";
 
 type EmployeeProfilePageProps = {
   params: Promise<{ id: string }>;
@@ -185,30 +186,38 @@ export default async function EmployeeProfilePage({ params, searchParams }: Empl
     auditEventsByAssignmentId.set(event.assignment_id, [...(auditEventsByAssignmentId.get(event.assignment_id) ?? []), event]);
   }
 
-  for (const document of sourceDocumentMap.values()) {
-    if (!document.file_path) {
-      continue;
-    }
+  // One round trip per bucket, in parallel. These three loops each awaited a
+  // signature per document before the page could paint.
+  const [batchedSourceUrls, batchedSignedPdfUrls, batchedUploadUrls] = await Promise.all([
+    createSignedUrlMap(
+      admin.storage,
+      [...sourceDocumentMap.values()].map((document) => ({
+        key: document.id,
+        bucket: "company-documents",
+        path: document.file_path,
+      })),
+    ),
+    createSignedUrlMap(
+      admin.storage,
+      typedSignedDocuments.map((document) => ({
+        key: document.assignment_id,
+        bucket: document.file_bucket,
+        path: document.file_path,
+      })),
+    ),
+    createSignedUrlMap(
+      admin.storage,
+      typedOnboardingUploads.map((upload) => ({
+        key: upload.id,
+        bucket: upload.file_bucket,
+        path: upload.file_path,
+      })),
+    ),
+  ]);
 
-    const { data } = await admin.storage.from("company-documents").createSignedUrl(document.file_path, 60);
-    if (data?.signedUrl) {
-      signedUrls.set(document.id, data.signedUrl);
-    }
-  }
-
-  for (const document of typedSignedDocuments) {
-    const { data } = await admin.storage.from(document.file_bucket).createSignedUrl(document.file_path, 60);
-    if (data?.signedUrl) {
-      signedPdfUrls.set(document.assignment_id, data.signedUrl);
-    }
-  }
-
-  for (const upload of typedOnboardingUploads) {
-    const { data } = await admin.storage.from(upload.file_bucket).createSignedUrl(upload.file_path, 60);
-    if (data?.signedUrl) {
-      uploadUrls.set(upload.id, data.signedUrl);
-    }
-  }
+  for (const [key, url] of batchedSourceUrls) signedUrls.set(key, url);
+  for (const [key, url] of batchedSignedPdfUrls) signedPdfUrls.set(key, url);
+  for (const [key, url] of batchedUploadUrls) uploadUrls.set(key, url);
 
   const requiredAssignments = typedAssignments.filter((assignment) => templatesById.get(assignment.template_id)?.required);
   const completeCount = requiredAssignments.filter((assignment) => assignment.status !== "pending").length;

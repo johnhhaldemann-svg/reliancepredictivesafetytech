@@ -114,6 +114,27 @@ describe("portal module access", () => {
     expect(canAccessEmployeePath("employee", "active", "/employee/clients/client-123", ["active_companies"])).toBe(true);
   });
 
+  // The company directory rides the existing active_companies grant rather than
+  // introducing a key of its own, so anyone who can already open a client record
+  // can list companies — and nobody else gains a surface they did not have.
+  it("gates the company directory on the same grant as the client record", () => {
+    expect(getPortalModuleForPath("/employee/clients")?.key).toBe("active_companies");
+    expect(canAccessEmployeePath("employee", "active", "/employee/clients", ["active_companies"])).toBe(true);
+    expect(canAccessEmployeePath("employee", "active", "/employee/clients", ["dashboard"])).toBe(false);
+    expect(canAccessEmployeePath("employee", "archived", "/employee/clients", ["active_companies"])).toBe(false);
+    // Owners bypass grants entirely, the same way they do everywhere else.
+    expect(canAccessEmployeePath("super_admin", "active", "/employee/clients", [])).toBe(true);
+  });
+
+  // The meetings index and the meeting room both ride the sales_pipeline grant,
+  // so listing meetings never reaches someone who cannot open one.
+  it("gates the sales meetings index on the sales pipeline grant", () => {
+    expect(getPortalModuleForPath("/employee/sales-meetings")?.key).toBe("sales_pipeline");
+    expect(canAccessEmployeePath("employee", "active", "/employee/sales-meetings", ["sales_pipeline"])).toBe(true);
+    expect(canAccessEmployeePath("employee", "active", "/employee/sales-meetings", ["dashboard"])).toBe(false);
+    expect(canAccessEmployeePath("employee", "archived", "/employee/sales-meetings", ["sales_pipeline"])).toBe(false);
+  });
+
   it("denies unknown paths and inactive users", () => {
     expect(canAccessEmployeePath("employee", "active", "/employee/not-real", ["dashboard"])).toBe(false);
     expect(canAccessEmployeePath("employee", "archived", "/employee", ["dashboard"])).toBe(false);

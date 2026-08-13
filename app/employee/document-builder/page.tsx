@@ -16,15 +16,22 @@ interface DraftRow {
 
 export default async function DocumentBuilderPage() {
   const { supabase } = await getDocumentAccess();
-  const { data: drafts } = supabase
-    ? await supabase
-        .from("document_builder_drafts")
-        .select("id, doc_type, title, review_status, confidence_level, company_document_id, created_at")
-        .order("created_at", { ascending: false })
-        .limit(100)
-    : { data: null };
+  const [{ data: drafts }, { data: clients }] = supabase
+    ? await Promise.all([
+        supabase
+          .from("document_builder_drafts")
+          .select("id, doc_type, title, review_status, confidence_level, company_document_id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase.from("company_clients").select("id, name").order("name"),
+      ])
+    : [{ data: null }, { data: null }];
 
   const rows = (drafts ?? []) as DraftRow[];
+  const clientOptions = ((clients ?? []) as Array<{ id: string; name: string }>).map((client) => ({
+    id: client.id,
+    name: client.name,
+  }));
 
   return (
     <>
@@ -37,7 +44,7 @@ export default async function DocumentBuilderPage() {
       </div>
 
       <div className="document-grid">
-        <DocumentBuilderForm />
+        <DocumentBuilderForm clients={clientOptions} />
 
         <section>
           <h2 style={{ marginBottom: 12 }}>Drafts</h2>

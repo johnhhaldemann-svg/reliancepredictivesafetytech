@@ -22,6 +22,7 @@ import type {
   HrFormField,
 } from "@/lib/company-data";
 import { createClient } from "@/lib/supabase/server";
+import { createSignedUrlMap } from "@/lib/storage/signed-urls";
 
 type HrOnboardingPageProps = {
   searchParams: Promise<{ message?: string; error?: string; next?: string }>;
@@ -263,25 +264,31 @@ export default async function HrOnboardingPage({ searchParams }: HrOnboardingPag
     sourceDocumentIds.length > 0 ? await supabase.from("company_documents").select("*").in("id", sourceDocumentIds) : { data: [] };
 
   const sourceDocumentMap = new Map((sourceDocuments ?? []).map((document) => [document.id, document as CompanyDocument]));
-  const sourceUrls = new Map<string, string>();
-  const completedPdfUrls = new Map<string, string>();
-  const uploadUrls = new Map<string, string>();
 
-  for (const document of sourceDocumentMap.values()) {
-    if (!document.file_path) continue;
-    const { data } = await supabase.storage.from("company-documents").createSignedUrl(document.file_path, 60);
-    if (data?.signedUrl) sourceUrls.set(document.id, data.signedUrl);
-  }
-
-  for (const document of typedSignedDocuments) {
-    const { data } = await supabase.storage.from(document.file_bucket).createSignedUrl(document.file_path, 60);
-    if (data?.signedUrl) completedPdfUrls.set(document.assignment_id, data.signedUrl);
-  }
-
-  for (const upload of typedUploads) {
-    const { data } = await supabase.storage.from(upload.file_bucket).createSignedUrl(upload.file_path, 60);
-    if (data?.signedUrl) uploadUrls.set(upload.id, data.signedUrl);
-  }
+  // One round trip per bucket, in parallel, instead of one per document in
+  // three sequential loops — the whole set used to block the page from painting.
+  const [sourceUrls, completedPdfUrls, uploadUrls] = await Promise.all([
+    createSignedUrlMap(
+      supabase.storage,
+      [...sourceDocumentMap.values()].map((document) => ({
+        key: document.id,
+        bucket: "company-documents",
+        path: document.file_path,
+      })),
+    ),
+    createSignedUrlMap(
+      supabase.storage,
+      typedSignedDocuments.map((document) => ({
+        key: document.assignment_id,
+        bucket: document.file_bucket,
+        path: document.file_path,
+      })),
+    ),
+    createSignedUrlMap(
+      supabase.storage,
+      typedUploads.map((upload) => ({ key: upload.id, bucket: upload.file_bucket, path: upload.file_path })),
+    ),
+  ]);
 
   const templatesById = new Map(typedTemplates.map((template) => [template.id, template]));
   const visibleAssignments = typedAssignments.filter((assignment) => {
