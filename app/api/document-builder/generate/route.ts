@@ -4,6 +4,8 @@ import { generateSafetyDocument } from "@/lib/documents/builder";
 import { documentToMarkdown } from "@/lib/documents/schema";
 import { docTypes, type DocType, type DocumentBuilderInput } from "@/lib/documents/types";
 import { validateAIOutput } from "@/lib/ai/gateway";
+import { getClientContext } from "@/lib/ai/client-context";
+import { applyClientDefaults, renderClientContextBlock } from "@/lib/ai/client-context-prompt";
 import { recordAuditEvent } from "@/lib/audit/events";
 
 export const maxDuration = 120;
@@ -29,6 +31,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "A document title is required." }, { status: 400 });
   }
 
+  // When the form names a client, the platform supplies what it already knows
+  // about them: industry and jurisdiction fill any blanks the user left, and a
+  // short briefing rides along with the prompt. Anything typed always wins, and
+  // an unknown client simply yields no context.
+  const clientContext = await getClientContext(input.client_id);
+  input = applyClientDefaults(input, clientContext);
+
   const { data: generation, error: genError } = await supabase
     .from("document_builder_generations")
     .insert({
@@ -36,6 +45,9 @@ export async function POST(req: Request) {
       doc_type: docType,
       title: input.title.trim(),
       inputs: input,
+      // Stamped so a generated document files back to the client it was drafted
+      // for, instead of being findable only by whoever remembers running it.
+      client_id: input.client_id ?? null,
       status: "running",
     })
     .select("id")
@@ -46,7 +58,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await generateSafetyDocument(input);
+    const result = await generateSafetyDocument(input, renderClientContextBlock(clientContext));
     const markdown = documentToMarkdown(result);
 
     // AI Gateway — official-workflow content must pass validateAIOutput().

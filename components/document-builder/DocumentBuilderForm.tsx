@@ -4,7 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FilePlus2, Loader2 } from "lucide-react";
 
-export function DocumentBuilderForm() {
+export interface DocumentBuilderClientOption {
+  id: string;
+  name: string;
+}
+
+export function DocumentBuilderForm({ clients = [] }: { clients?: DocumentBuilderClientOption[] }) {
   const router = useRouter();
   const [docType, setDocType] = useState<"sop" | "policy">("sop");
   const [showMore, setShowMore] = useState(false);
@@ -20,6 +25,10 @@ export function DocumentBuilderForm() {
     const payload = {
       doc_type: docType,
       title: String(formData.get("title") ?? "").trim(),
+      // Optional. When set, the server fills industry and jurisdiction from the
+      // client record for any field left blank, and briefs the model on what the
+      // platform already knows about them.
+      client_id: String(formData.get("client_id") ?? "").trim() || null,
       industry: String(formData.get("industry") ?? "").trim(),
       jurisdiction: String(formData.get("jurisdiction") ?? "").trim(),
       scope: String(formData.get("scope") ?? "").trim(),
@@ -79,6 +88,24 @@ export function DocumentBuilderForm() {
           <label htmlFor="scope">What should it cover?</label>
           <textarea id="scope" name="scope" rows={3} placeholder="Describe the task, area, equipment, or topic this document addresses." />
         </div>
+
+        {clients.length > 0 ? (
+          <div className="field">
+            <label htmlFor="client_id">Who is it for? (optional)</label>
+            <select id="client_id" name="client_id" defaultValue="">
+              <option value="">Not client-specific</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+            <small style={{ color: "var(--portal-muted)" }}>
+              Picking a client fills in their industry and jurisdiction, and tells the AI what we already know about
+              them.
+            </small>
+          </div>
+        ) : null}
 
         <button
           type="button"

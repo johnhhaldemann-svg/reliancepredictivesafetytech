@@ -10,7 +10,11 @@ import { buildDocumentPrompt, documentResponseSchema, parseDocumentOutput } from
  * of lib/legal/research.ts (runStructuredLegalResearch) but does not use web
  * search — document drafting works from the provided scope, not live lookup.
  */
-export async function generateSafetyDocument(input: DocumentBuilderInput): Promise<GeneratedDocument> {
+export async function generateSafetyDocument(
+  input: DocumentBuilderInput,
+  /** Optional briefing about the client this document is for (lib/ai/client-context-prompt). */
+  clientContextBlock?: string,
+): Promise<GeneratedDocument> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not configured. Add it to your environment variables.");
@@ -39,7 +43,7 @@ export async function generateSafetyDocument(input: DocumentBuilderInput): Promi
         schema: documentResponseSchema as any,
       },
     },
-    input: buildDocumentPrompt(input),
+    input: buildDocumentPrompt(input, clientContextBlock),
   });
 
   // Metered before the incomplete check — a cut-off run still spent the tokens.

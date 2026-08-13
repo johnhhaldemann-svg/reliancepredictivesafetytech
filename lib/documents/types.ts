@@ -46,6 +46,13 @@ export interface GeneratedDocument {
 export interface DocumentBuilderInput {
   doc_type: DocType;
   title: string;
+  /**
+   * The client this document is being drafted for, when one is chosen. Lets the
+   * platform supply the industry and jurisdiction it already knows, and files
+   * the generation back against the client instead of leaving it findable only
+   * by whoever ran it.
+   */
+  client_id?: string | null;
   scope?: string;
   hazards?: string;
   company_standards?: string;
