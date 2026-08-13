@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClientProposalDecision } from "@/components/clients/ClientProposalDecision";
 import { fileCenterPath } from "@/lib/files/types";
 import { proposalStatusLabels, type ProposalStatus } from "@/lib/proposals/types";
 import {
@@ -99,24 +100,32 @@ export function ClientRelatedPanels({
                   {pipeline.lostCount > 0 ? ` · ${pipeline.lostCount} declined` : ""}
                 </p>
                 <div className="checklist-list">
-                  {proposals.map((proposal) => (
-                    <article className="checklist-row" key={proposal.id}>
-                      <div>
-                        <h3>
-                          <Link href={`/employee/proposals/${proposal.id}`}>
-                            {[proposal.proposal_number, proposal.title].filter(Boolean).join(" — ") || "Untitled"}
-                          </Link>
-                        </h3>
-                        <p>
-                          {proposalLabel(proposal.status)}
-                          {Number(proposal.proposal_value ?? 0) > 0
-                            ? ` · ${money.format(Number(proposal.proposal_value))}`
-                            : ""}
-                          {proposal.accepted_at ? ` · accepted ${formatDate(proposal.accepted_at)}` : ""}
-                        </p>
-                      </div>
-                    </article>
-                  ))}
+                  {proposals.map((proposal) => {
+                    const label = [proposal.proposal_number, proposal.title].filter(Boolean).join(" — ") || "Untitled";
+                    return (
+                      <article className="checklist-row" key={proposal.id}>
+                        <div>
+                          <h3>
+                            <Link href={`/employee/proposals/${proposal.id}`}>{label}</Link>
+                          </h3>
+                          <p>
+                            {proposalLabel(proposal.status)}
+                            {Number(proposal.proposal_value ?? 0) > 0
+                              ? ` · ${money.format(Number(proposal.proposal_value))}`
+                              : ""}
+                            {proposal.accepted_at ? ` · accepted ${formatDate(proposal.accepted_at)}` : ""}
+                          </p>
+                          {/* Renders only for a sent proposal — the one status
+                              from which an outcome is reachable. */}
+                          <ClientProposalDecision
+                            proposalId={proposal.id}
+                            status={proposal.status as ProposalStatus}
+                            title={label}
+                          />
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               </>
             )}
