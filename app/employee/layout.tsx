@@ -1,7 +1,7 @@
 import { EmployeePresenceChat } from "@/components/EmployeePresenceChat";
 import { EmployeeSidebar } from "@/components/EmployeeSidebar";
 import { isMissingSchemaRelationError } from "@/lib/supabase/errors";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionContext } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { hasFullPortalVisibility, isPortalOwnerRole } from "@/lib/user-management";
 
@@ -14,10 +14,12 @@ function getChatDisplayName(profile: EmployeeChatProfile | undefined, email: str
 }
 
 export default async function EmployeeLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = supabase ? await supabase.auth.getUser() : { data: { user: null } };
+  // Shared with the page rendering inside this layout: getSessionContext is
+  // request-memoized, so the auth round trip and the role lookup happen once
+  // for the whole render instead of once here and again in the page.
+  const session = await getSessionContext();
+  const supabase = session.supabase;
+  const user = session.user;
   let chatProps: React.ComponentProps<typeof EmployeePresenceChat> | null = null;
   let currentRole: { role: string; account_status: string } | null = null;
   let canAccessFinance = false;
@@ -27,14 +29,13 @@ export default async function EmployeeLayout({ children }: { children: React.Rea
   let unreadChatNotificationCount = 0;
 
   if (supabase && user) {
-    const { data: role } = await supabase
-      .from("user_roles")
-      .select("role, account_status")
-      .eq("user_id", user.id)
-      .eq("account_status", "active")
-      .maybeSingle();
+    // Preserves the previous semantics exactly: the old query filtered on
+    // account_status = 'active', so a suspended user's role never reached the
+    // sidebar. getSessionContext returns the row either way, so the filter
+    // moves here rather than disappearing.
+    const role = session.isActive ? { role: session.role ?? "", account_status: session.accountStatus ?? "" } : null;
     currentRole = role;
-    const isOwner = role?.account_status === "active" && isPortalOwnerRole(role.role);
+    const isOwner = session.isActive && isPortalOwnerRole(session.role);
 
     const [
       { data: profiles, error: profilesError },
