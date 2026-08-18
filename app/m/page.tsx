@@ -5,6 +5,7 @@ import { MobileAvatar } from "@/components/mobile/MobileAvatar";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
 import { MobileInstallPrompt } from "@/components/mobile/MobileInstallPrompt";
 import { canAccessMobileTab, formatRelativeTimestamp, mobileAppTabs } from "@/lib/mobile-app";
+import { removedClientStatus } from "@/lib/clients/removal";
 import { isMissingSchemaRelationError } from "@/lib/supabase/errors";
 import { loadMobileSession } from "./session";
 
@@ -65,6 +66,7 @@ export default async function MobileHomePage() {
           .from("company_clients")
           .select("id, name, lifecycle_stage, updated_at", { count: "exact" })
           .in("lifecycle_stage", EARLY_PIPELINE_STAGES)
+          .not("status", "ilike", removedClientStatus)
           .order("updated_at", { ascending: false })
           .limit(3)
       : Promise.resolve({ data: [], count: 0, error: null }),

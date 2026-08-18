@@ -3,6 +3,7 @@ import { LeadTriagePanel } from "@/components/LeadTriagePanel";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
 import { MobileLeadsList } from "@/components/mobile/MobileLeadsList";
 import { loadLatestLeadTriage } from "@/lib/leads/latest-triage";
+import { removedClientStatus } from "@/lib/clients/removal";
 import { isMissingSchemaRelationError } from "@/lib/supabase/errors";
 import { requireMobileTabSession } from "../session";
 
@@ -15,6 +16,9 @@ export default async function MobileLeadsPage() {
   const { data: clients, error } = await supabase
     .from("company_clients")
     .select("id, name, contact_name, lifecycle_stage, status, owner, updated_at")
+    // Removed from the lifecycle means removed here too — the mobile list is
+    // the same book of business as the directory, just on a phone.
+    .not("status", "ilike", removedClientStatus)
     .order("updated_at", { ascending: false })
     .limit(200);
 

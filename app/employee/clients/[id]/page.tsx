@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 import { ClientLifecycleStepper } from "@/components/clients/ClientLifecycleStepper";
 import { ClientDetailManager } from "@/components/ClientDetailManager";
 import {
@@ -25,8 +26,10 @@ import {
   type ClientOption as ProposalClientOption,
 } from "@/components/proposals/ProposalCreateForm";
 import { ClientReceivablesPanel } from "@/components/clients/ClientReceivablesPanel";
+import { ClientRemovalControl } from "@/components/clients/ClientRemovalControl";
+import { isRemovedClient, resolveClientRemovalFlags } from "@/lib/clients/removal";
 import type { RevenueIncomeRow } from "@/lib/reports/revenue";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSessionContext } from "@/lib/supabase/server";
 
 type ClientDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -55,6 +58,12 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Request-memoized, so this reuses the lookup the layout already did rather
+  // than paying for another auth + user_roles round trip.
+  const session = await getSessionContext();
+  const removalFlags = resolveClientRemovalFlags(session.role, session.isActive);
+  const removed = isRemovedClient((client.status ?? null) as string | null);
 
   const [
     { data: activities },
@@ -145,10 +154,36 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
           <h1>{client.name}</h1>
           <p>{client.lifecycle_stage} - {client.contact_name ?? "No contact"} - {client.email ?? "No email"}</p>
         </div>
-        <Link className="button button-light" href="/employee/sales">
-          Back to pipeline
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <Link className="button button-light" href="/employee/sales">
+            Back to pipeline
+          </Link>
+          {/* Removing from the record, not just the directory: this is the page
+              someone lands on from a search or a proposal, and it is where they
+              can actually see what the company is before deciding. */}
+          <ClientRemovalControl
+            allowed={removalFlags.canRemove}
+            clientId={client.id as string}
+            clientName={(client.name ?? "This company") as string}
+            removed={removed}
+            variant="full"
+          />
+        </div>
       </div>
+
+      {/* A removed company is still reachable by direct link — from a proposal,
+          a file, a bookmark. Saying so up front stops the next reader
+          concluding the pipeline board has lost a deal. */}
+      {removed ? (
+        <p className="client-removed-banner" role="status">
+          <AlertTriangle aria-hidden size={15} />
+          <span>
+            <strong>{client.name}</strong> has been removed from the client lifecycle. It is hidden from the directory,
+            the pipeline board and Active Companies. Nothing attached to it — proposals, files, contacts, checklist —
+            was deleted, and Restore puts it back at {client.lifecycle_stage}.
+          </span>
+        </p>
+      ) : null}
       {/* Where this deal actually is, above everything else. The record held
           the whole lifecycle already, but the stage was one grey word in the
           subtitle and the work sat five screens down. */}

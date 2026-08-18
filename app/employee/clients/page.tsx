@@ -11,7 +11,9 @@ import {
   sanitizeSearch,
   type DirectorySearchParams,
 } from "@/lib/clients/directory";
-import { createClient } from "@/lib/supabase/server";
+import { isRemovedClient, removedClientStatus, resolveClientRemovalFlags, resolveIncludeRemoved } from "@/lib/clients/removal";
+import { ClientRemovalControl } from "@/components/clients/ClientRemovalControl";
+import { getSessionContext } from "@/lib/supabase/server";
 
 /**
  * The company directory.
@@ -38,6 +40,7 @@ interface DirectoryRow {
   email: string | null;
   lifecycle_stage: string;
   owner: string | null;
+  status: string | null;
   updated_at: string;
 }
 
@@ -55,7 +58,11 @@ export default async function ClientsDirectoryPage({
   searchParams: Promise<DirectorySearchParams>;
 }) {
   const params = await searchParams;
-  const supabase = await createClient();
+  // Shares the request-memoized session lookup with the layout, and carries the
+  // role the Remove control needs, so this is one round trip rather than two.
+  const session = await getSessionContext();
+  const supabase = session.supabase;
+  const removalFlags = resolveClientRemovalFlags(session.role, session.isActive);
 
   // Filters are read from the URL and applied in the DATABASE query, so this
   // stays a server component and nothing becomes a client-side Supabase read
@@ -63,6 +70,7 @@ export default async function ClientsDirectoryPage({
   const search = sanitizeSearch(params.q);
   const stage = resolveStageFilter(params.stage);
   const owner = (params.owner ?? "").trim();
+  const includeRemoved = resolveIncludeRemoved(params.removed);
   const page = resolvePage(params.page);
   const rangeStart = (page - 1) * pageSize;
 
@@ -73,12 +81,21 @@ export default async function ClientsDirectoryPage({
   if (supabase) {
     let query = supabase
       .from("company_clients")
-      .select("id, name, contact_name, email, lifecycle_stage, owner, updated_at", { count: "exact" })
+      .select("id, name, contact_name, email, lifecycle_stage, owner, status, updated_at", { count: "exact" })
       .order("updated_at", { ascending: false })
       .range(rangeStart, rangeStart + pageSize - 1);
 
     if (stage) query = query.eq("lifecycle_stage", stage);
     if (owner) query = query.eq("owner", owner);
+    // Removed companies are excluded in the DATABASE query, not filtered out of
+    // the page after the fact — otherwise the count, the paging and the "50 per
+    // page" window would all still be counting rows nobody can see.
+    //
+    // `not.ilike` rather than `neq` so this agrees with `isRemovedClient`, which
+    // matches case-insensitively because `status` is a free-text column the
+    // company profile form writes through a plain text input. Safe against NULL
+    // (which `not.ilike` would filter out) because the column is `not null`.
+    if (!includeRemoved) query = query.not("status", "ilike", removedClientStatus);
     // Quoted and escaped in buildClientSearchFilter — a raw term here would be
     // PostgREST filter syntax, not data.
     if (search) query = query.or(buildClientSearchFilter(search));
@@ -109,7 +126,9 @@ export default async function ClientsDirectoryPage({
           <p>Every company at every stage, from first lead to renewal. Search by name, contact, email, or owner.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span className="badge">{totalCount} total</span>
+          <span className="badge">
+            {totalCount} {includeRemoved ? "total, removed included" : "on the lifecycle"}
+          </span>
         </div>
       </div>
 
@@ -146,12 +165,27 @@ export default async function ClientsDirectoryPage({
               ))}
             </select>
           </div>
+          <div className="field" style={{ alignSelf: "end" }}>
+            <label htmlFor="client-show-removed" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* value="1" matches resolveIncludeRemoved: an unchecked box
+                  submits nothing, which is what keeps removed companies hidden
+                  by default. */}
+              <input
+                defaultChecked={includeRemoved}
+                id="client-show-removed"
+                name="removed"
+                type="checkbox"
+                value="1"
+              />
+              Show removed
+            </label>
+          </div>
           <div className="field" style={{ alignSelf: "end", display: "flex", gap: 8 }}>
             <button className="button button-primary" type="submit">
               Apply
             </button>
             {filtered ? (
-              <Link className="button button-light" href="/employee/clients">
+              <Link className="button button-light" href={buildDirectoryHref({ removed: includeRemoved ? "1" : undefined })}>
                 Clear
               </Link>
             ) : null}
@@ -161,7 +195,17 @@ export default async function ClientsDirectoryPage({
         {rows.length === 0 ? (
           <div className="empty-state">
             {filtered ? (
-              "No companies match these filters."
+              includeRemoved ? (
+                "No companies match these filters."
+              ) : (
+                <>
+                  No companies match these filters.{" "}
+                  <Link href={buildDirectoryHref({ q: search, stage, owner, removed: "1" })}>
+                    Include removed companies
+                  </Link>{" "}
+                  to check whether one was taken off the lifecycle.
+                </>
+              )
             ) : (
               <>
                 No companies yet.{" "}
@@ -181,15 +225,23 @@ export default async function ClientsDirectoryPage({
                     <th>Owner</th>
                     <th>Updated</th>
                     <th>Actions</th>
+                    <th>Lifecycle</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((client) => {
                     const recordHref = `/employee/clients/${client.id}`;
+                    const removed = isRemovedClient(client.status);
                     return (
                       <tr key={client.id}>
                         <td>
                           <Link href={recordHref}>{client.name}</Link>
+                          {removed ? (
+                            <>
+                              {" "}
+                              <span className="badge">Removed</span>
+                            </>
+                          ) : null}
                         </td>
                         <td>{client.lifecycle_stage}</td>
                         <td>{client.contact_name ?? client.email ?? "—"}</td>
@@ -203,6 +255,14 @@ export default async function ClientsDirectoryPage({
                           >
                             <Building2 size={14} /> Open record
                           </Link>
+                        </td>
+                        <td>
+                          <ClientRemovalControl
+                            allowed={removalFlags.canRemove}
+                            clientId={client.id}
+                            clientName={client.name}
+                            removed={removed}
+                          />
                         </td>
                       </tr>
                     );
@@ -229,7 +289,13 @@ export default async function ClientsDirectoryPage({
                   {page > 1 ? (
                     <Link
                       className="button button-light"
-                      href={buildDirectoryHref({ q: search, stage, owner, page: String(page - 1) })}
+                      href={buildDirectoryHref({
+                        q: search,
+                        stage,
+                        owner,
+                        page: String(page - 1),
+                        removed: includeRemoved ? "1" : undefined,
+                      })}
                     >
                       Previous
                     </Link>
@@ -240,7 +306,13 @@ export default async function ClientsDirectoryPage({
                   {page < totalPages ? (
                     <Link
                       className="button button-light"
-                      href={buildDirectoryHref({ q: search, stage, owner, page: String(page + 1) })}
+                      href={buildDirectoryHref({
+                        q: search,
+                        stage,
+                        owner,
+                        page: String(page + 1),
+                        removed: includeRemoved ? "1" : undefined,
+                      })}
                     >
                       Next <ArrowRight size={14} />
                     </Link>

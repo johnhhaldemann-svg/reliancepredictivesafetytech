@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { getCommandSnapshot, type CommandPriorityItem } from "@/lib/ai/command-context";
 import { lifecycleStages } from "@/lib/company-data";
+import { removedClientStatus } from "@/lib/clients/removal";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessEmployeePath, hasFullPortalVisibility, isPortalOwnerRole } from "@/lib/user-management";
 import {
@@ -155,7 +156,9 @@ export default async function EmployeeDashboardPage({
       : { counts: null, priorityItems: [] as CommandPriorityItem[], generatedAt: "", summary: "" };
 
   const { data: clientStages } = supabase
-    ? await supabase.from("company_clients").select("lifecycle_stage")
+    ? // A company taken off the lifecycle must stop inflating the stage counts,
+      // or the dashboard reports a pipeline the board no longer shows.
+      await supabase.from("company_clients").select("lifecycle_stage").not("status", "ilike", removedClientStatus)
     : { data: null };
 
   const stageCounts = new Map<string, number>();

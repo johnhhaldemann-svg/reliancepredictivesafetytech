@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CompanyClient } from "@/lib/company-data";
+import { removedClientStatus } from "@/lib/clients/removal";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function ActiveCompaniesPage() {
@@ -9,6 +10,8 @@ export default async function ActiveCompaniesPage() {
         .from("company_clients")
         .select("*")
         .in("lifecycle_stage", ["Active Company", "Renewal / Expansion"])
+        // Same exclusion as the pipeline board and the directory.
+        .not("status", "ilike", removedClientStatus)
         .order("updated_at", { ascending: false })
     : { data: null };
   const clients = (data ?? []) as CompanyClient[];

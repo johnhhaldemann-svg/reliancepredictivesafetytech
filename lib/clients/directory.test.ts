@@ -121,6 +121,18 @@ describe("buildDirectoryHref", () => {
       "/employee/clients?q=acme&stage=Lead",
     );
   });
+
+  // Turning a page must not silently re-hide the removed companies the viewer
+  // just asked to see.
+  it("carries the removed toggle through paging", () => {
+    expect(buildDirectoryHref({ page: "3", removed: "1" })).toBe("/employee/clients?page=3&removed=1");
+  });
+
+  it("only honours the exact value resolveIncludeRemoved accepts", () => {
+    expect(buildDirectoryHref({ removed: "0" })).toBe("/employee/clients");
+    expect(buildDirectoryHref({ removed: "true" })).toBe("/employee/clients");
+    expect(buildDirectoryHref({ removed: undefined })).toBe("/employee/clients");
+  });
 });
 
 describe("hasActiveFilters", () => {

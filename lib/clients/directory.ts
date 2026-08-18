@@ -19,6 +19,8 @@ export interface DirectorySearchParams {
   stage?: string;
   owner?: string;
   page?: string;
+  /** "1" to include companies removed from the lifecycle; see lib/clients/removal.ts. */
+  removed?: string;
 }
 
 /**
@@ -79,11 +81,19 @@ export function buildDirectoryHref(params: DirectorySearchParams): string {
   if (params.stage) query.set("stage", params.stage);
   if (params.owner) query.set("owner", params.owner);
   if (params.page && params.page !== "1") query.set("page", params.page);
+  // Carried through paging and clearing, so "Show removed" survives a page turn
+  // instead of silently hiding the rows the viewer just went looking for.
+  if (params.removed === "1") query.set("removed", "1");
   const suffix = query.toString();
   return suffix ? `/employee/clients?${suffix}` : "/employee/clients";
 }
 
-/** True once the viewer has narrowed the directory, which changes the empty-state copy. */
+/**
+ * True once the viewer has narrowed the directory, which changes the empty-state
+ * copy. `removed` is not a narrowing filter — it widens the list — so it is
+ * excluded: "no companies match these filters" would be the wrong message for a
+ * viewer who has only asked to see more.
+ */
 export function hasActiveFilters(params: { search: string; stage: string; owner: string }): boolean {
   return Boolean(params.search || params.stage || params.owner);
 }
