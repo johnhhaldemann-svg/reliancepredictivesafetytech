@@ -1,732 +1,359 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import {
   AlertTriangle,
   ArrowRight,
-  BarChart3,
-  BookOpenCheck,
-  Bot,
   BriefcaseBusiness,
+  Bot,
   Building2,
-  CalendarDays,
-  CarFront,
-  CheckCircle2,
-  Clock3,
-  Database,
-  DollarSign,
   FileSignature,
-  FileText,
-  Gauge,
   Inbox,
-  ListChecks,
-  Network,
   ReceiptText,
-  Scale,
   ScrollText,
-  ShieldCheck,
-  UploadCloud,
-  Users,
 } from "lucide-react";
-import {
-  companyPositionSeed,
-  lifecycleStages,
-  requiredDocuments,
-  startupChecklistSeed,
-  type CompanyClient,
-  type CompanyDocument,
-} from "@/lib/company-data";
 import { getCommandSnapshot, type CommandPriorityItem } from "@/lib/ai/command-context";
+import { lifecycleStages } from "@/lib/company-data";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessEmployeePath, hasFullPortalVisibility, isPortalOwnerRole } from "@/lib/user-management";
-import { DashboardSwitch } from "@/components/dashboard/DashboardSwitch";
-import { dashboardCookieName, parseDashboardVariant } from "@/lib/dashboard/preference";
+import {
+  collapseQueue,
+  countByWorkspace,
+  countQueueByFilter,
+  filterQueue,
+  parseQueueFilter,
+  pickHeadline,
+  queueFilters,
+  type QueueFilter,
+} from "@/lib/dashboard/queue";
 
-const moduleGroups = [
-  {
-    label: "Operations",
-    description: "Company records, launch readiness, and decision control.",
-    modules: [
-      { title: "AI Command Center", href: "/employee/ai", icon: Bot },
-      { title: "Work Management", href: "/employee/work", icon: ListChecks },
-      { title: "Parking Lots", href: "/employee/parking-lots", icon: CarFront },
-      { title: "Employee Expenses", href: "/employee/expenses", icon: ReceiptText },
-      { title: "Finance Center", href: "/employee/finance", icon: DollarSign },
-      { title: "Payroll Tracker", href: "/employee/payroll", icon: ReceiptText },
-      { title: "Operations Database", href: "/employee/operations", icon: Database },
-      { title: "Startup Checklist", href: "/employee/checklist", icon: ListChecks },
-      { title: "Launch Gate", href: "/employee/launch-gate", icon: BookOpenCheck },
-    ],
-  },
-  {
-    label: "Commercial",
-    description: "Requests, pipeline movement, and active accounts.",
-    modules: [
-      { title: "Request Inbox", href: "/employee/inbox", icon: Inbox },
-      { title: "Sales Pipeline", href: "/employee/sales", icon: BriefcaseBusiness },
-      { title: "Active Companies", href: "/employee/active-companies", icon: Gauge },
-    ],
-  },
-  {
-    label: "People",
-    description: "Roles, HR readiness, employee records, and time review.",
-    modules: [
-      { title: "Company Tree", href: "/employee/company-tree", icon: Network },
-      { title: "HR Onboarding", href: "/employee/hr-onboarding", icon: Users },
-      { title: "Time Cards", href: "/employee/time-cards", icon: Clock3 },
-    ],
-  },
-  {
-    label: "Governance",
-    description: "Controlled documents, legal issues, and required registers.",
-    modules: [
-      { title: "Master Document Library", href: "/employee/documents", icon: UploadCloud },
-      { title: "Legal Issues", href: "/employee/legal-issues", icon: Scale },
-      { title: "Required Documents", href: "/employee/required-documents", icon: FileText },
-    ],
-  },
-];
+/**
+ * The dashboard.
+ *
+ * The one it replaced answered "what does this platform contain" -- a module
+ * directory with four panels that each rendered the same rows, so one overdue
+ * invoice appeared three times on a single screen. This one answers "what
+ * should I do next": one queue, counted once, with the single most consequential
+ * item named at the top.
+ *
+ * Nothing here writes. It is a read of the same command snapshot the AI Command
+ * Center already uses, so the numbers on this page and that one cannot drift.
+ *
+ * The previous dashboard is preserved at the tag save-point-20260818-pre-full-concept
+ * if it is ever wanted back.
+ */
 
-function formatDate(value: string | null | undefined) {
-  if (!value) {
-    return "No due date";
+const filterLabels: Record<QueueFilter, string> = {
+  all: "All",
+  mine: "Mine",
+  review: "To review",
+  risk: "At risk",
+};
+
+const priorityTone: Record<string, string> = {
+  critical: "focus-dot-critical",
+  high: "focus-dot-high",
+  medium: "focus-dot-medium",
+  low: "focus-dot-low",
+};
+
+function greeting(now: Date) {
+  const hour = now.getHours();
+
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+
+  return "Good evening";
+}
+
+function formatDay(now: Date) {
+  return now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
+function daysLate(dueDate: string | null, now: Date) {
+  if (!dueDate) return null;
+
+  const due = new Date(`${dueDate.slice(0, 10)}T23:59:59.999Z`);
+  if (!Number.isFinite(due.getTime()) || due.getTime() >= now.getTime()) return null;
+
+  return Math.floor((now.getTime() - due.getTime()) / 86_400_000) + 1;
+}
+
+function agePill(item: CommandPriorityItem, now: Date) {
+  const late = daysLate(item.dueDate, now);
+
+  if (late !== null) {
+    return { tone: "focus-pill-danger", text: `${late} day${late === 1 ? "" : "s"} late` };
   }
 
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(value));
-}
-
-function percent(part: number, whole: number) {
-  if (whole === 0) {
-    return 0;
+  if (item.reviewRequired) {
+    return { tone: "focus-pill-warning", text: "To review" };
   }
 
-  return Math.round((part / whole) * 100);
-}
-
-function buildPipelineCounts(clients: Pick<CompanyClient, "lifecycle_stage">[]) {
-  const counts = new Map<string, number>();
-  clients.forEach((client) => {
-    counts.set(client.lifecycle_stage, (counts.get(client.lifecycle_stage) ?? 0) + 1);
-  });
-
-  return lifecycleStages.map((stage) => ({ stage, count: counts.get(stage) ?? 0 }));
-}
-
-function workItemTone(item: CommandPriorityItem) {
-  if (item.priority === "critical" || item.priority === "high") return "danger";
-  if (item.reviewRequired) return "gold";
-  return "neutral";
-}
-
-function WorkQueueList({ empty, items }: { empty: string; items: CommandPriorityItem[] }) {
-  if (items.length === 0) {
-    return <div className="empty-state">{empty}</div>;
+  if (item.priority === "critical" || item.priority === "high") {
+    return { tone: "focus-pill-warning", text: "At risk" };
   }
 
-  return (
-    <div className="attention-list">
-      {items.map((item) => (
-        <Link className="attention-row work-queue-row" href={item.actionHref} key={`${item.sourceType}-${item.sourceId}-${item.label}`}>
-          <span className={`status-dot status-dot-${workItemTone(item)}`} />
-          <span>
-            <strong>{item.title}</strong>
-            <small>
-              {item.sourceLabel} - {item.status} - {item.detail}
-            </small>
-          </span>
-          <span className="queue-label">{item.label}</span>
-        </Link>
-      ))}
-    </div>
-  );
+  return { tone: "focus-pill-muted", text: item.status || "Open" };
 }
 
-export default async function EmployeeDashboardPage() {
-  // The Focus dashboard lives at its own route. Anyone who has chosen it is sent
-  // there; anyone who has not sees exactly what they saw yesterday.
-  const cookieStore = await cookies();
-  if (parseDashboardVariant(cookieStore.get(dashboardCookieName)?.value) === "focus") {
-    redirect("/employee/home");
-  }
+export default async function EmployeeDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  // No cookie read here on purpose. This route does not bounce a visitor whose
+  // preference is classic — it is a nav destination in its own right, so anyone
+  // can look at the Focus dashboard without committing to it. The tab strip
+  // marks where you ARE, not what you last chose, and the preference is written
+  // only when a tab is pressed.
+
+  const { q } = await searchParams;
+  const activeFilter = parseQueueFilter(q);
+  const now = new Date();
 
   const supabase = await createClient();
   const {
     data: { user },
   } = supabase ? await supabase.auth.getUser() : { data: { user: null } };
+
+  if (supabase && !user) {
+    redirect("/employee-login?next=/employee");
+  }
+
   const { data: currentRole } =
     supabase && user
-      ? await supabase
-          .from("user_roles")
-          .select("role, account_status")
-          .eq("user_id", user.id)
-          .maybeSingle()
+      ? await supabase.from("user_roles").select("role, account_status").eq("user_id", user.id).maybeSingle()
       : { data: null };
-  const [{ data: financeAuthorization }, { data: moduleAccess }] =
+
+  const [{ data: financeAuthorization }, { data: moduleAccess }, { data: profile }] =
     supabase && user
       ? await Promise.all([
           supabase.from("company_finance_authorized_users").select("user_id").eq("user_id", user.id).maybeSingle(),
           hasFullPortalVisibility(currentRole?.role, currentRole?.account_status)
             ? Promise.resolve({ data: [] })
             : supabase.from("portal_user_module_access").select("module_key").eq("user_id", user.id),
+          supabase.from("employee_profiles").select("display_name, legal_name").eq("user_id", user.id).maybeSingle(),
         ])
-      : [{ data: null }, { data: [] }];
+      : [{ data: null }, { data: [] }, { data: null }];
+
   const moduleKeys = (moduleAccess ?? []).map((access) => access.module_key);
-  const canViewFinanceModule = canAccessEmployeePath(currentRole?.role, currentRole?.account_status, "/employee/finance", moduleKeys);
-  const canAccessFinance = Boolean(
-    currentRole?.account_status === "active" && canViewFinanceModule && (isPortalOwnerRole(currentRole.role) || financeAuthorization),
+  const canViewFinanceModule = canAccessEmployeePath(
+    currentRole?.role,
+    currentRole?.account_status,
+    "/employee/finance",
+    moduleKeys,
   );
-  const canAccessPayroll = Boolean(currentRole?.account_status === "active" && isPortalOwnerRole(currentRole.role));
-  const canManageFinanceRecords = Boolean(financeAuthorization && canViewFinanceModule);
-  const canOpenPath = (href: string) =>
-    !supabase ||
-    (href === "/employee/finance"
-      ? canAccessFinance && canAccessEmployeePath(currentRole?.role, currentRole?.account_status, href, moduleKeys)
-      : href === "/employee/payroll"
-        ? canAccessPayroll && canAccessEmployeePath(currentRole?.role, currentRole?.account_status, href, moduleKeys)
-      : canAccessEmployeePath(currentRole?.role, currentRole?.account_status, href, moduleKeys));
-  // 9 queries instead of 19 — one per table, counts derived in JS
-  const [
-    { data: checklistStatuses },
-    { data: documentStatuses },
-    { data: requestStatuses },
-    { data: clientStages },
-    { count: priorityOpsCount },
-    { count: openLegalIssueCount },
-    { data: positionStatuses },
-    { count: submittedTimeCardCount },
-    { data: proposalStatusRows },
-  ] = supabase
-    ? await Promise.all([
-        supabase.from("company_checklist_items").select("status"),
-        supabase.from("company_documents").select("status"),
-        supabase.from("demo_requests").select("status"),
-        supabase.from("company_clients").select("lifecycle_stage"),
-        supabase
-          .from("company_operations_records")
-          .select("*", { count: "exact", head: true })
-          .in("priority", ["High", "Critical"])
-          .neq("status", "Archived"),
-        supabase
-          .from("company_legal_issues")
-          .select("*", { count: "exact", head: true })
-          .in("status", ["Open", "In Review", "Waiting"]),
-        supabase.from("company_positions").select("status"),
-        supabase.from("employee_time_cards").select("*", { count: "exact", head: true }).eq("status", "submitted"),
-        supabase.from("client_proposals").select("status"),
-      ])
-    : [
-        { data: startupChecklistSeed.map((i) => ({ status: i.status })) },
-        { data: [] as { status: string }[] },
-        { data: [] as { status: string }[] },
-        { data: [] as { lifecycle_stage: string }[] },
-        { count: 0 },
-        { count: 0 },
-        { data: companyPositionSeed.map((p) => ({ status: p.status })) },
-        { count: 0 },
-        { data: [] as { status: string }[] },
-      ];
+  const canAccessFinance = Boolean(
+    currentRole?.account_status === "active" &&
+      canViewFinanceModule &&
+      (isPortalOwnerRole(currentRole.role) || financeAuthorization),
+  );
 
-  const checklistCount = checklistStatuses?.length ?? startupChecklistSeed.length;
-  const blockedChecklistCount =
-    checklistStatuses?.filter((i) => i.status === "Blocked").length ??
-    startupChecklistSeed.filter((i) => i.status === "Blocked").length;
-  const documentCount = documentStatuses?.length ?? 0;
-  const approvedDocumentCount =
-    documentStatuses?.filter((d) => d.status && ["Approved", "Signed / Executed"].includes(d.status)).length ?? 0;
-  const documentStatusRows = (documentStatuses ?? []) as Pick<CompanyDocument, "status">[];
-  const requestCount = requestStatuses?.length ?? 0;
-  const newRequestCount = requestStatuses?.filter((r) => r.status === "new").length ?? 0;
-  const clientCount = clientStages?.length ?? 0;
-  // Quoted but not yet decided — the deals actually in flight.
-  const openProposalCount =
-    proposalStatusRows?.filter((p) => ["draft", "in_review", "sent"].includes(p.status as string)).length ?? 0;
-  const awaitingReviewCount = proposalStatusRows?.filter((p) => p.status === "in_review").length ?? 0;
-  const activeCompanyCount =
-    clientStages?.filter((c) => ["Active Company", "Renewal / Expansion"].includes(c.lifecycle_stage as string)).length ?? 0;
-  const pipelineRows = buildPipelineCounts((clientStages ?? []) as Pick<CompanyClient, "lifecycle_stage">[]);
-  const companyPositionCount = positionStatuses?.length ?? companyPositionSeed.length;
-  const openPositionCount =
-    positionStatuses?.filter((p) => ["Open", "Needed"].includes(p.status)).length ??
-    companyPositionSeed.filter((position) => ["Open", "Needed"].includes(position.status)).length;
-  const requiredDocumentTotal = requiredDocuments.reduce((total, group) => total + group.items.length, 0);
-  const approvedReadiness = percent(approvedDocumentCount, documentCount);
-  const activeRiskCount = (openLegalIssueCount ?? 0) + (priorityOpsCount ?? 0) + (blockedChecklistCount ?? 0);
-  const isOwnerRole = canAccessPayroll;
-  const [commandSnapshot, { count: pendingOnboardingCount }, { count: totalOnboardingCount }] = await Promise.all([
-    supabase && user ? getCommandSnapshot(supabase, user.id) : Promise.resolve(null),
+  const snapshot =
     supabase && user
-      ? supabase.from("employee_document_assignments").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "pending")
-      : Promise.resolve({ count: 0 as number | null }),
-    supabase && user
-      ? supabase.from("employee_document_assignments").select("*", { count: "exact", head: true }).eq("user_id", user.id)
-      : Promise.resolve({ count: 0 as number | null }),
-  ]);
-  const financePriorityItems: CommandPriorityItem[] = [];
-  let financeOpenAmount = 0;
-  let financeReviewCount = 0;
+      ? await getCommandSnapshot(supabase, user.id)
+      : { counts: null, priorityItems: [] as CommandPriorityItem[], generatedAt: "", summary: "" };
 
-  if (supabase && canManageFinanceRecords) {
-    const [{ data: financeTransactions }, { data: financeRecurringItems }] = await Promise.all([
-      supabase.from("company_finance_transactions").select("*").neq("status", "cancelled").order("transaction_date", { ascending: true }).limit(80),
-      supabase.from("company_finance_recurring_items").select("*").eq("status", "active").order("next_due_date", { ascending: true }).limit(30),
-    ]);
-    const today = new Date().toISOString().slice(0, 10);
-    const soon = new Date();
-    soon.setDate(soon.getDate() + 14);
-    const soonDate = soon.toISOString().slice(0, 10);
+  const { data: clientStages } = supabase
+    ? await supabase.from("company_clients").select("lifecycle_stage")
+    : { data: null };
 
-    (financeTransactions ?? []).forEach((transaction) => {
-      const open =
-        (transaction.transaction_type === "expense" && ["planned", "due"].includes(transaction.status)) ||
-        (transaction.transaction_type === "income" && ["expected", "invoiced"].includes(transaction.status));
-      if (open) financeOpenAmount += Number(transaction.amount);
-      if (transaction.review_status !== "reviewed") financeReviewCount += 1;
-      if (open && transaction.transaction_date <= soonDate) {
-        financePriorityItems.push({
-          title: transaction.title,
-          label: transaction.transaction_type === "expense" ? "Finance due" : "Income follow-up",
-          href: "/employee/finance",
-          actionHref: "/employee/finance",
-          priority: transaction.transaction_date < today ? "high" : "medium",
-          detail: `${transaction.category} - $${Number(transaction.amount).toFixed(2)} - due ${formatDate(transaction.transaction_date)}`,
-          owner: transaction.owner,
-          dueDate: transaction.transaction_date,
-          status: transaction.status,
-          sourceLabel: "Finance",
-          sourceType: "company_finance_transaction",
-          sourceId: transaction.id,
-          reviewRequired: transaction.review_status !== "reviewed",
-        });
-      }
-    });
+  const stageCounts = new Map<string, number>();
+  (clientStages ?? []).forEach((row) => {
+    const stage = String(row.lifecycle_stage ?? "");
+    stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + 1);
+  });
 
-    (financeRecurringItems ?? []).forEach((item) => {
-      if (item.next_due_date && item.next_due_date <= soonDate) {
-        financePriorityItems.push({
-          title: item.title,
-          label: "Recurring finance",
-          href: "/employee/finance",
-          actionHref: "/employee/finance",
-          priority: item.next_due_date < today ? "high" : "medium",
-          detail: `${item.category} - $${Number(item.amount).toFixed(2)} - next ${formatDate(item.next_due_date)}`,
-          owner: item.owner,
-          dueDate: item.next_due_date,
-          status: item.status,
-          sourceLabel: "Finance",
-          sourceType: "company_finance_recurring_item",
-          sourceId: item.id,
-          reviewRequired: false,
-        });
-      }
-    });
-  }
+  const totalClients = (clientStages ?? []).length;
+  // display_name is what a person is called; legal_name is the fallback the
+  // HR record always carries. Owner strings in the snapshot are display names.
+  const viewerName = (profile?.display_name as string | null) ?? (profile?.legal_name as string | null) ?? null;
+  const items = snapshot.priorityItems ?? [];
+  const counts = countQueueByFilter(items, viewerName, now);
+  const visible = filterQueue(items, activeFilter, viewerName, now);
+  const groups = collapseQueue(visible);
+  const headline = pickHeadline(items);
+  const byWorkspace = countByWorkspace(items);
 
-  const workItems = [...financePriorityItems, ...(commandSnapshot?.priorityItems ?? [])].filter((item) => canOpenPath(item.actionHref));
-  const myWorkItems = workItems.filter((item) => !item.reviewRequired).slice(0, 6);
-  const reviewItems = workItems.filter((item) => item.reviewRequired).slice(0, 6);
-  const riskItems = workItems
-    .filter((item) => item.priority === "critical" || item.priority === "high" || item.dueDate)
-    .slice(0, 6);
+  const dealPath = [
+    { n: "01", label: "Requests", href: "/employee/inbox", detail: `${snapshot.counts?.newDemoRequests ?? 0} new`, icon: Inbox },
+    { n: "02", label: "Pipeline", href: "/employee/sales", detail: `${totalClients} companies`, icon: BriefcaseBusiness },
+    { n: "03", label: "Client Lifecycle", href: "/employee/clients", detail: "Every stage", icon: Building2 },
+    { n: "04", label: "Proposals", href: "/employee/proposals", detail: `${snapshot.counts?.proposalsAwaitingReview ?? 0} in review`, icon: ScrollText },
+    { n: "05", label: "Contracts", href: "/employee/documents", detail: "Signature status", icon: FileSignature },
+    { n: "06", label: "Money", href: canAccessFinance ? "/employee/finance" : "/employee/reports", detail: canAccessFinance ? "Cash movement" : "Reports", icon: ReceiptText },
+  ];
 
-  const kpis = [
-    {
-      label: "Active clients",
-      value: activeCompanyCount ?? 0,
-      detail: `${clientCount ?? 0} total client records`,
-      icon: Gauge,
-      href: "/employee/active-companies",
-    },
-    {
-      label: "Pipeline activity",
-      value: (clientCount ?? 0) + (requestCount ?? 0),
-      detail: `${newRequestCount ?? 0} new request${newRequestCount === 1 ? "" : "s"}`,
-      icon: BarChart3,
-      href: "/employee/sales",
-    },
-    {
-      label: "Risk queue",
-      value: activeRiskCount,
-      detail: `${openLegalIssueCount ?? 0} legal, ${blockedChecklistCount ?? 0} blocked`,
-      icon: AlertTriangle,
-      href: "/employee/legal-issues",
-    },
-    {
-      label: "Time cards",
-      value: submittedTimeCardCount ?? 0,
-      detail: "Submitted for review",
-      icon: Clock3,
-      href: "/employee/time-cards",
-    },
-    {
-      label: "Finance control",
-      value: financeReviewCount,
-      detail: canManageFinanceRecords ? `$${financeOpenAmount.toFixed(2)} open cash movement` : "Owner finance access",
-      icon: DollarSign,
-      href: "/employee/finance",
-    },
-    {
-      label: "Controlled docs",
-      value: documentCount ?? 0,
-      detail: `${approvedReadiness}% approved or executed`,
-      icon: ShieldCheck,
-      href: "/employee/documents",
-    },
-  ].filter((kpi) => canOpenPath(kpi.href));
-  const visibleModuleGroups = moduleGroups
-    .map((group) => ({
-      ...group,
-      modules: group.modules.filter((module) => canOpenPath(module.href)),
-    }))
-    .filter((group) => group.modules.length > 0);
-
-  const pendingCount = pendingOnboardingCount ?? 0;
-  const totalCount = totalOnboardingCount ?? 0;
-  const getStartedSteps = [
-    {
-      href: "/employee/hr-onboarding",
-      icon: Users,
-      title: "HR Onboarding",
-      description: pendingCount > 0 ? `${pendingCount} item${pendingCount === 1 ? "" : "s"} pending` : "All items complete",
-      variant: pendingCount > 0 ? "urgent" : "done",
-    },
-    { href: "/employee/hr-documents", icon: FileText, title: "HR Documents", description: "Your employment documents", variant: "default" },
-    { href: "/employee/time-cards", icon: Clock3, title: "Time Cards", description: "Log and submit your hours", variant: "default" },
-    { href: "/employee/mail", icon: Inbox, title: "Employee Mail", description: "Messages from your team", variant: "default" },
-    { href: "/employee/calendar", icon: CalendarDays, title: "Calendar", description: "Your schedule and events", variant: "default" },
-  ].filter((step) => canOpenPath(step.href));
-
-  /**
-   * The lead-to-close path, in order, with live counts.
-   *
-   * The Get Started panel used to teach only the HR loop — onboarding,
-   * documents, time cards, mail, calendar — and it rendered exclusively in the
-   * NON-owner branch of the KPI strip, so the people who run deals never saw any
-   * statement of how a deal moves. Owners got six tiles reading 0 on a fresh
-   * install and no entry point at all.
-   */
-  const dealSteps = [
-    {
-      href: "/employee/inbox",
-      icon: Inbox,
-      title: "1. Request Inbox",
-      description:
-        newRequestCount > 0
-          ? `${newRequestCount} new lead${newRequestCount === 1 ? "" : "s"} waiting`
-          : "Where inbound leads land",
-      variant: newRequestCount > 0 ? "urgent" : "default",
-    },
-    {
-      href: "/employee/sales",
-      icon: BarChart3,
-      title: "2. Sales Pipeline",
-      description: clientCount > 0 ? `${clientCount} compan${clientCount === 1 ? "y" : "ies"} in play` : "Add the first company",
-      variant: "default",
-    },
-    {
-      href: "/employee/clients",
-      icon: Building2,
-      title: "3. Client Lifecycle",
-      description: "Open a record to run the whole deal from one screen",
-      variant: "default",
-    },
-    {
-      href: "/employee/proposals",
-      icon: ScrollText,
-      title: "4. Proposals",
-      description:
-        awaitingReviewCount > 0
-          ? `${awaitingReviewCount} awaiting review`
-          : openProposalCount > 0
-            ? `${openProposalCount} open`
-            : "Write and send a quote",
-      variant: awaitingReviewCount > 0 ? "urgent" : "default",
-    },
-  ].filter((step) => canOpenPath(step.href));
+  const pulse = [
+    { value: totalClients, label: "Companies in play", tone: "" },
+    { value: snapshot.counts?.proposalsAwaitingReview ?? 0, label: "Awaiting your approval", tone: (snapshot.counts?.proposalsAwaitingReview ?? 0) > 0 ? "focus-tile-alert" : "" },
+    { value: snapshot.counts?.pendingWorkflowProposals ?? 0, label: "AI items to review", tone: "" },
+    { value: snapshot.counts?.stateComplianceReviews ?? 0, label: "State reviews queued", tone: "" },
+  ];
 
   return (
-    <div className="command-center">
-      <div className="portal-topline command-hero">
+    <>
+      <div className="portal-topline focus-topline">
         <div>
-          <div className="eyebrow">Employee Operations Hub</div>
-          <h1>Enterprise command center</h1>
-          <p>Prioritized operating view for requests, sales, active companies, documents, legal issues, people, and launch readiness.</p>
-        </div>
-        <div className="command-status">
-          <span className="badge">{supabase ? "Supabase connected" : "Supabase setup required"}</span>
-          <span>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-          <DashboardSwitch current="classic" />
+          <div className="eyebrow">{formatDay(now)}</div>
+          <h1>
+            {greeting(now)}
+            {viewerName ? `, ${viewerName.split(" ")[0]}` : ""}
+          </h1>
+          <p>
+            {counts.all === 0
+              ? "Nothing is waiting on you. The queue is clear."
+              : `${counts.all} thing${counts.all === 1 ? "" : "s"} need attention. The one below moves money or blocks work.`}
+          </p>
         </div>
       </div>
 
-      {pendingCount > 0 && (
-        <div className="onboarding-banner" role="alert">
-          <div className="onboarding-banner-body">
-            <FileSignature size={20} />
-            <div>
-              <strong>Complete your HR onboarding</strong>
-              <p>
-                {pendingCount} of {totalCount} {totalCount === 1 ? "item" : "items"} still need your attention.
-              </p>
-            </div>
-          </div>
-          <Link className="button button-primary" href="/employee/hr-onboarding">
-            Go to Onboarding <ArrowRight size={16} />
-          </Link>
-        </div>
-      )}
-
-      {/* ABOVE the KPIs, not instead of them. This panel used to live in the
-          else-branch below, so it never rendered for an owner — the one person
-          who most needs to know where a deal starts saw only tiles reading 0. */}
-      {dealSteps.length > 0 ? (
-        <section className="command-panel" aria-label="How a deal moves">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Lead to close</span>
-              <h2>How a deal moves</h2>
-            </div>
-          </div>
-          <div className="get-started-steps">
-            {dealSteps.map((step) => {
-              const Icon = step.icon;
-              return (
-                <Link
-                  key={step.href}
-                  href={step.href}
-                  className={`get-started-step${step.variant === "urgent" ? " get-started-step-urgent" : ""}`}
-                >
-                  <span className="get-started-step-icon">
-                    <Icon size={18} />
-                  </span>
-                  <span className="get-started-step-text">
-                    <strong>{step.title}</strong>
-                    <span>{step.description}</span>
-                  </span>
-                  <ArrowRight size={15} className="get-started-step-arrow" />
-                </Link>
-              );
-            })}
+      {headline ? (
+        <section className="focus-headline">
+          <div className="eyebrow">Do this first</div>
+          <h2>{headline.title}</h2>
+          <p>
+            {headline.sourceLabel} - {headline.detail}
+          </p>
+          <div className="focus-headline-actions">
+            <Link className="button focus-btn-gold" href={headline.actionHref || headline.href}>
+              Open it <ArrowRight size={15} />
+            </Link>
+            <Link className="button button-light" href={headline.href}>
+              See the record
+            </Link>
           </div>
         </section>
       ) : null}
 
-      {isOwnerRole ? (
-        <section className="kpi-strip" aria-label="Command center KPIs">
-          {kpis.map((kpi) => {
-            const Icon = kpi.icon;
-            return (
-              <Link className="kpi-card" href={kpi.href} key={kpi.label}>
-                <span className="kpi-icon">
-                  <Icon size={18} />
-                </span>
-                <span className="kpi-value">{kpi.value}</span>
-                <span className="kpi-label">{kpi.label}</span>
-                <span className="kpi-detail">{kpi.detail}</span>
-              </Link>
-            );
-          })}
-        </section>
-      ) : (
-        <section className="command-panel" aria-label="Getting started">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Welcome</span>
-              <h2>Your first steps</h2>
-            </div>
+      <div className="focus-pulse">
+        {pulse.map((tile) => (
+          <div className={`focus-tile ${tile.tone}`} key={tile.label}>
+            <div className="focus-tile-value">{tile.value}</div>
+            <div className="focus-tile-label">{tile.label}</div>
           </div>
-          <div className="get-started-steps">
-            {getStartedSteps.map((step) => {
-              const Icon = step.icon;
-              return (
-                <Link
-                  key={step.href}
-                  href={step.href}
-                  className={`get-started-step${step.variant === "urgent" ? " get-started-step-urgent" : step.variant === "done" ? " get-started-step-done" : ""}`}
-                >
-                  <span className="get-started-step-icon">
-                    <Icon size={18} />
-                  </span>
-                  <span className="get-started-step-text">
-                    <strong>{step.title}</strong>
-                    <span>{step.description}</span>
-                  </span>
-                  <ArrowRight size={15} className="get-started-step-arrow" />
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <div className="command-layout">
-        <section className="command-panel attention-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Needs Attention</span>
-              <h2>Priority work queue</h2>
-            </div>
-            <span className="badge">{workItems.length} visible</span>
-          </div>
-
-          <WorkQueueList
-            empty="No urgent requests, legal issues, HR reviews, time cards, or high-priority operations records are waiting."
-            items={workItems.slice(0, 8)}
-          />
-        </section>
-
-        <section className="command-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Commercial</span>
-              <h2>Pipeline health</h2>
-            </div>
-            <Link className="panel-link" href="/employee/sales">
-              Open pipeline <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className="pipeline-summary">
-            {pipelineRows
-              .map((item) => (
-                <div className="pipeline-summary-row" key={item.stage}>
-                  <span>{item.stage}</span>
-                  <strong>{item.count}</strong>
-                </div>
-              ))}
-          </div>
-        </section>
+        ))}
       </div>
 
-      <section className="command-panel">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">Internal Work</span>
-            <h2>My work, review queue, and risk due soon</h2>
+      <section className="table-card focus-block">
+        <div className="checklist-section">
+          <div className="stage-workspace-head">
+            <div>
+              <span className="eyebrow">Lead to cash</span>
+              <h2>One path, six modules</h2>
+            </div>
           </div>
-          <Link className="panel-link" href="/employee/ai">
-            Open AI command <ArrowRight size={16} />
-          </Link>
-        </div>
-        <div className="work-queue-grid">
-          <section className="work-queue-column">
-            <h3>My Work</h3>
-            <WorkQueueList empty="No assigned operating work is waiting." items={myWorkItems} />
-          </section>
-          <section className="work-queue-column">
-            <h3>Review Queue</h3>
-            <WorkQueueList empty="No HR, time-card, legal, proposal, or commercial reviews are waiting." items={reviewItems} />
-          </section>
-          <section className="work-queue-column">
-            <h3>Risk / Due Soon</h3>
-            <WorkQueueList empty="No high-risk or due-soon work is visible." items={riskItems} />
-          </section>
+          <div className="focus-path">
+            {dealPath.map((step) => (
+              <Link className="focus-path-step" href={step.href} key={step.n}>
+                <span className="focus-path-n">{step.n}</span>
+                <span className="focus-path-label">{step.label}</span>
+                <span className="focus-path-detail">{step.detail}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
-      <div className="command-layout command-layout-secondary">
-        <section className="command-panel">
-          <div className="panel-heading">
+      <div className="focus-columns">
+        <section className="table-card">
+          <div className="stage-workspace-head focus-queue-head">
             <div>
-              <span className="eyebrow">Governance</span>
-              <h2>Document readiness</h2>
+              <span className="eyebrow">Priority queue</span>
+              <h2>Everything, counted once</h2>
             </div>
-            <Link className="panel-link" href="/employee/required-documents">
-              Register <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className="readiness-grid">
-            <div>
-              <span>Required groups</span>
-              <strong>{requiredDocuments.length}</strong>
-              <small>{requiredDocumentTotal} required document items</small>
-            </div>
-            <div>
-              <span>Controlled files</span>
-              <strong>{documentCount ?? 0}</strong>
-              <small>{approvedDocumentCount ?? 0} approved or executed</small>
-            </div>
-            <div>
-              <span>Launch checklist</span>
-              <strong>{checklistCount ?? startupChecklistSeed.length}</strong>
-              <small>{blockedChecklistCount ?? 0} blocked items</small>
+            <div className="focus-filters">
+              {queueFilters.map((filter) => (
+                <Link
+                  className={`focus-filter${filter === activeFilter ? " is-active" : ""}`}
+                  href={filter === "all" ? "/employee" : `/employee?q=${filter}`}
+                  key={filter}
+                >
+                  {filterLabels[filter]} <span className="focus-filter-count">{counts[filter]}</span>
+                </Link>
+              ))}
             </div>
           </div>
-          <div className="document-status-list">
-            {documentStatusRows.length === 0 ? (
-              <div className="document-status-row">
-                <span>No controlled document status data yet</span>
-                <strong>0</strong>
-              </div>
+
+          <div className="focus-queue">
+            {groups.length === 0 ? (
+              <div className="empty-state">Nothing in this filter.</div>
             ) : (
-              Object.entries(
-                documentStatusRows.reduce<Record<string, number>>((accumulator, document) => {
-                  accumulator[document.status] = (accumulator[document.status] ?? 0) + 1;
-                  return accumulator;
-                }, {}),
-              ).map(([status, count]) => (
-                <div className="document-status-row" key={status}>
-                  <span>{status}</span>
-                  <strong>{count}</strong>
-                </div>
-              ))
+              groups.map((group) => {
+                const pill = agePill(group.lead, now);
+
+                return (
+                  <Link className="focus-row" href={group.lead.actionHref || group.lead.href} key={group.key}>
+                    <span className={`focus-dot ${priorityTone[group.lead.priority] ?? "focus-dot-low"}`} />
+                    <span className="focus-row-body">
+                      <span className="focus-row-title">
+                        {group.count > 1 ? `${group.lead.label} - ${group.count} items` : group.lead.title}
+                      </span>
+                      <span className="focus-row-detail">
+                        {group.count > 1
+                          ? `${group.lead.sourceLabel} - including ${group.lead.title}`
+                          : `${group.lead.sourceLabel} - ${group.lead.detail}`}
+                      </span>
+                    </span>
+                    <span className={`focus-pill ${pill.tone}`}>{pill.text}</span>
+                  </Link>
+                );
+              })
             )}
           </div>
         </section>
 
-        <section className="command-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">People</span>
-              <h2>Capacity snapshot</h2>
+        <div className="focus-side">
+          <section className="table-card">
+            <div className="checklist-section">
+              <span className="eyebrow">Across the platform</span>
+              <h2 className="focus-side-h">Where the pressure is</h2>
+              <div className="focus-workspaces">
+                {byWorkspace.length === 0 ? (
+                  <div className="empty-state">Nothing open anywhere.</div>
+                ) : (
+                  byWorkspace.map((row) => (
+                    <div className="focus-workspace-row" key={row.workspace}>
+                      <span>{row.workspace}</span>
+                      <strong>{row.count}</strong>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-            <Link className="panel-link" href="/employee/company-tree">
-              Company tree <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className="capacity-card">
-            <div>
-              <span className="kpi-value">{companyPositionCount ?? companyPositionSeed.length}</span>
-              <span className="kpi-label">Tracked positions</span>
+          </section>
+
+          <section className="table-card focus-block">
+            <div className="checklist-section">
+              <span className="eyebrow">Assistant</span>
+              <h2 className="focus-side-h">AI Command Center</h2>
+              <div className="focus-ai-value">{snapshot.counts?.pendingWorkflowProposals ?? 0}</div>
+              <p className="focus-ai-note">
+                Waiting on a human. Nothing an agent proposes touches a record until someone approves it.
+              </p>
+              <Link className="button button-light focus-ai-button" href="/employee/ai">
+                <Bot size={15} /> Open AI Command
+              </Link>
             </div>
-            <div>
-              <span className="kpi-value">{openPositionCount ?? 0}</span>
-              <span className="kpi-label">Open or needed roles</span>
+          </section>
+
+          <section className="table-card focus-block">
+            <div className="checklist-section">
+              <span className="eyebrow">Pipeline</span>
+              <h2 className="focus-side-h">All twelve stages</h2>
+              <div className="focus-stages">
+                {lifecycleStages.map((stage) => (
+                  <div className="focus-stage-row" key={stage}>
+                    <span>{stage}</span>
+                    <strong>{stageCounts.get(stage) ?? 0}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div>
-              <span className="kpi-value">{submittedTimeCardCount ?? 0}</span>
-              <span className="kpi-label">Time cards awaiting review</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
 
-      <section className="command-panel module-launcher">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">Workspace</span>
-            <h2>Operating modules</h2>
-          </div>
-        </div>
-        <div className="module-group-grid">
-          {visibleModuleGroups.map((group) => (
-            <section className="module-group" key={group.label}>
-              <h3>{group.label}</h3>
-              <p>{group.description}</p>
-              <div className="module-link-list">
-                {group.modules.map((module) => {
-                  const Icon = module.icon;
-                  return (
-                    <Link href={module.href} key={module.href}>
-                      <Icon size={17} />
-                      <span>{module.title}</span>
-                      <CheckCircle2 size={15} />
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
-      </section>
-    </div>
+    </>
   );
 }

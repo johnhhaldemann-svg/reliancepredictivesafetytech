@@ -25,15 +25,15 @@ const sidebarPath = join(process.cwd(), "components", "EmployeeSidebar.tsx");
 const sidebarSource = readFileSync(sidebarPath, "utf8");
 
 /**
- * `href: "..."` entries from the navGroups literal. The JSX below it writes
+ * `href: "..."` entries from the workspaces literal. The JSX below it writes
  * `href="/employee"` and `item.href === "/employee/ai"`, neither of which uses
  * the object-literal `href:` form, so neither is picked up here.
  */
 function sidebarHrefs(): string[] {
-  const start = sidebarSource.indexOf("const navGroups = [");
-  expect(start, "navGroups literal not found in EmployeeSidebar.tsx").toBeGreaterThan(-1);
+  const start = sidebarSource.indexOf("const workspaces = [");
+  expect(start, "workspaces literal not found in EmployeeSidebar.tsx").toBeGreaterThan(-1);
   const end = sidebarSource.indexOf("\n];", start);
-  expect(end, "navGroups literal is not terminated").toBeGreaterThan(start);
+  expect(end, "workspaces literal is not terminated").toBeGreaterThan(start);
 
   const hrefs: string[] = [];
   for (const match of sidebarSource.slice(start, end).matchAll(/href:\s*"([^"]+)"/g)) {

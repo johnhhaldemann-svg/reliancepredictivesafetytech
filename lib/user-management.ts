@@ -87,10 +87,7 @@ export function canManagePortalUserAccount(actorRole: string | null | undefined,
 }
 
 export const portalModuleCatalog = [
-  // Both dashboards under one key: /employee is the classic one, /employee/home the
-  // Focus rebuild. Same module, same permission — this surfaces a second route,
-  // it does not widen who can reach a dashboard.
-  { key: "dashboard", label: "Dashboard", group: "Command", pathPrefixes: ["/employee", "/employee/home"] },
+  { key: "dashboard", label: "Dashboard", group: "Command", pathPrefixes: ["/employee"] },
   { key: "mobile_app", label: "Mobile App", group: "Command", pathPrefixes: ["/m"] },
   { key: "ai_command", label: "AI Command", group: "Command", pathPrefixes: ["/employee/ai"] },
   { key: "website_operations", label: "Website Ops", group: "Command", pathPrefixes: ["/employee/website-operations"] },
