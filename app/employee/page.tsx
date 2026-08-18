@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import {
   AlertTriangle,
   ArrowRight,
@@ -37,6 +39,8 @@ import {
 import { getCommandSnapshot, type CommandPriorityItem } from "@/lib/ai/command-context";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessEmployeePath, hasFullPortalVisibility, isPortalOwnerRole } from "@/lib/user-management";
+import { DashboardSwitch } from "@/components/dashboard/DashboardSwitch";
+import { dashboardCookieName, parseDashboardVariant } from "@/lib/dashboard/preference";
 
 const moduleGroups = [
   {
@@ -138,6 +142,13 @@ function WorkQueueList({ empty, items }: { empty: string; items: CommandPriority
 }
 
 export default async function EmployeeDashboardPage() {
+  // The Focus dashboard lives at its own route. Anyone who has chosen it is sent
+  // there; anyone who has not sees exactly what they saw yesterday.
+  const cookieStore = await cookies();
+  if (parseDashboardVariant(cookieStore.get(dashboardCookieName)?.value) === "focus") {
+    redirect("/employee/home");
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -443,6 +454,7 @@ export default async function EmployeeDashboardPage() {
         <div className="command-status">
           <span className="badge">{supabase ? "Supabase connected" : "Supabase setup required"}</span>
           <span>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+          <DashboardSwitch current="classic" />
         </div>
       </div>
 
