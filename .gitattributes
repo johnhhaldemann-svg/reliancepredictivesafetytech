@@ -1,0 +1,32 @@
+# Normalize line endings. The repository stores LF for all text files.
+# Windows/OneDrive editors may write CRLF into the working tree; git converts
+# on the way in, so those files no longer show as modified and no longer
+# collide line-for-line during merges.
+* text=auto eol=lf
+
+# Shell scripts must stay LF even on Windows checkouts.
+*.sh   text eol=lf
+*.mjs  text eol=lf
+
+# Windows batch files must stay CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Binary assets: never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.zip  binary
+*.mp4  binary
+*.mov  binary

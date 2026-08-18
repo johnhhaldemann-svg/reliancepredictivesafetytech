@@ -11,3 +11,10 @@ tsconfig.tsbuildinfo
 NDA_Reliance_PST.docx
 Chemical_Management_Checklist.pdf
 Project_Maco_AI_Code_Ready_Blueprint_v0.9_UPDATED.html
+
+# FUSE mount artifacts (left behind when a file cannot be unlinked)
+.fuse_hidden*
+
+# Local scratch and per-machine tool state
+tmp/
+.claude/settings.local.json
