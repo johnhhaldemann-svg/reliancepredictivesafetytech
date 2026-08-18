@@ -123,6 +123,7 @@ export const portalModuleCatalog = [
   // between them, so it has to be granted deliberately, per user.
   { key: "ehs_talent_engine", label: "Talent Engine", group: "Commercial", pathPrefixes: ["/employee/talent-engine"] },
   { key: "active_companies", label: "Active Companies", group: "Commercial", pathPrefixes: ["/employee/active-companies", "/employee/clients"] },
+  { key: "grant_tracker", label: "Grant Tracker", group: "Commercial", pathPrefixes: ["/employee/grants"] },
   { key: "employee_mail", label: "Employee Mail", group: "Commercial", pathPrefixes: ["/employee/mail"] },
   { key: "company_tree", label: "Company Tree", group: "People", pathPrefixes: ["/employee/company-tree"] },
   { key: "hr_onboarding", label: "HR Onboarding", group: "People", pathPrefixes: ["/employee/hr-onboarding"] },

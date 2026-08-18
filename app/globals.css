@@ -9478,3 +9478,201 @@ a.platform-card:hover {
     max-height: 40vh;
   }
 }
+
+/* ========================================================================= */
+/* ===== Grant tracker ===================================================== */
+/* ========================================================================= */
+/* company_grant_opportunities had twelve real rows and no screen. Status is
+   never carried by colour alone — every pill states its stage in words, and a
+   deadline pill states the days left beside its tone. */
+
+.grant-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.grant-tile {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px 15px;
+}
+
+.grant-tile-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.grant-tile-label {
+  margin-top: 5px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--portal-muted);
+}
+
+.grant-tile-good { border-color: #cfe4d7; background: #eef7f0; }
+.grant-tile-good .grant-tile-value { color: #2e7d32; }
+.grant-tile-warn { border-color: #ecd9a8; background: #fff6e3; }
+.grant-tile-warn .grant-tile-value { color: #a86b00; }
+
+.grant-group { margin-bottom: 18px; }
+
+.grant-rows { display: grid; gap: 12px; margin-top: 4px; }
+
+.grant-row {
+  border: 1px solid #e4e7eb;
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 14px 16px;
+}
+
+.grant-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.grant-row-head h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 780;
+}
+
+.grant-row-agency {
+  margin: 3px 0 0;
+  font-size: 0.78rem;
+  color: var(--portal-muted);
+}
+
+.grant-row-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.grant-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.7rem;
+  font-weight: 750;
+  background: #f1f2f4;
+  color: var(--portal-muted);
+}
+
+.grant-pill-open { background: #edf3fb; color: #1c4f8f; }
+.grant-pill-active { background: #fdf6e6; color: #6b4c00; }
+.grant-pill-hold { background: #f1f2f4; color: var(--portal-muted); }
+.grant-pill-won { background: #eef7f0; color: #2e7d32; }
+.grant-pill-lost { background: #fdeeed; color: #b3261e; }
+.grant-pill-urgent { background: #fdeeed; color: #b3261e; }
+.grant-pill-past { background: #fdeeed; color: #b3261e; }
+.grant-pill-soon { background: #fff6e3; color: #a86b00; }
+.grant-pill-later { background: #f1f2f4; color: var(--portal-muted); }
+
+.grant-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 18px;
+  margin: 13px 0 0;
+}
+
+.grant-facts div { min-width: 0; }
+
+.grant-facts dt {
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--portal-muted);
+}
+
+.grant-facts dd {
+  margin: 3px 0 0;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.grant-paid { color: #2e7d32; font-weight: 750; }
+.grant-unpaid { color: #a86b00; font-weight: 750; }
+
+.grant-requirements,
+.grant-notes,
+.grant-source {
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #3a3a3a;
+}
+
+.grant-notes,
+.grant-source {
+  color: var(--portal-muted);
+  font-size: 0.78rem;
+}
+
+.grant-outcome {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-radius: 6px;
+  border-left: 3px solid #b3261e;
+  background: #fdeeed;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #7a1a15;
+}
+
+.grant-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1c4f8f;
+}
+
+/* Removing a company from the client lifecycle (lib/clients/removal.ts).
+   The control sits in a directory table cell and again on the company record,
+   so it wraps rather than forcing the row wider. */
+.client-removal-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.client-removal-prompt {
+  font-size: 0.85rem;
+  color: var(--portal-muted);
+  white-space: nowrap;
+}
+
+.client-removal-error {
+  font-size: 0.82rem;
+  color: #a12622;
+  max-width: 260px;
+}
+
+/* Matches .lifecycle-stepper-warning: the record's other "this is not the
+   normal state" strip, directly above it. */
+.client-removed-banner {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #e6c200;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #fffbe6;
+  color: #6b5600;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}

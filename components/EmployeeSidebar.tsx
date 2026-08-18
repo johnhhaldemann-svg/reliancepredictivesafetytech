@@ -112,6 +112,11 @@ const workspaces = [
         items: [
           { href: "/employee/proposals", label: "Proposals", icon: ScrollText },
           { href: "/employee/proposals/templates", label: "Proposal Templates", icon: LayoutTemplate },
+          // Both of these had a working page and no way to reach it except by
+          // typing the URL. Same module keys as Proposals and Sales Pipeline,
+          // so neither widens access — they only make the page findable.
+          { href: "/employee/proposals/bio", label: "Team Bios", icon: Users },
+          { href: "/employee/sales-meetings", label: "Sales Meetings", icon: CalendarDays },
           { href: "/employee/demo-showcase", label: "Demo Showcase", icon: Presentation },
         ],
       },
@@ -119,6 +124,7 @@ const workspaces = [
         label: "Money",
         items: [
           { href: "/employee/finance", label: "Finance Center", icon: DollarSign, financeOnly: true },
+          { href: "/employee/grants", label: "Grant Tracker", icon: HandCoins },
           { href: "/employee/reports", label: "Reports", icon: BarChart2 },
         ],
       },
