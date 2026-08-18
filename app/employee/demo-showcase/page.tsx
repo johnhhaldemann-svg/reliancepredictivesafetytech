@@ -14,9 +14,9 @@ import {
   GraduationCap,
   HardHat,
   MonitorPlay,
-  Presentation,
   Scale,
   ShieldAlert,
+  Sparkles,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -27,52 +27,76 @@ import { interactiveDemos } from "@/lib/demos/interactive-demos";
 
 const constructionLinks = [
   {
-    label: "Field Audits",
-    href: "https://safety360docs.com/field-audits",
-    description: "Field audit capture and safety observation workflows.",
-    icon: FileCheck2,
+    label: "Guided Demo",
+    href: "https://safepredict-platform.vercel.app/demo",
+    description: "Public click-through tour — opens with no login required.",
+    icon: MonitorPlay,
   },
   {
-    label: "CSEP",
-    href: "https://safety360docs.com/csep",
-    description: "Contractor safety execution plan generation and review.",
-    icon: Presentation,
-  },
-  {
-    label: "Safe Predict",
-    href: "https://safety360docs.com/safe-predict",
-    description: "Predictive safety command center and risk overview.",
+    label: "Command Center",
+    href: "https://safepredict-platform.vercel.app/dashboard",
+    description: "Portfolio safety posture across every active site.",
     icon: Gauge,
   },
   {
-    label: "Workforce",
-    href: "https://safety360docs.com/safe-predict/workforce",
-    description: "Workforce safety signals and crew risk context.",
-    icon: UserRound,
+    label: "Jobsites",
+    href: "https://safepredict-platform.vercel.app/jobsites",
+    description: "Site-by-site workspaces, phases, and live activity.",
+    icon: HardHat,
   },
   {
-    label: "Safe Predict Analytics",
-    href: "https://safety360docs.com/safe-predict/analytics",
-    description: "Predictive safety trends, analytics, and risk indicators.",
-    icon: BarChart3,
-  },
-  {
-    label: "Permits",
-    href: "https://safety360docs.com/safe-predict/permits",
-    description: "Permit activity and predictive safety permit review.",
+    label: "Contractors",
+    href: "https://safepredict-platform.vercel.app/contractors",
+    description: "Live subcontractor risk scoring, prequal, and approvals.",
     icon: BriefcaseBusiness,
   },
   {
-    label: "Hazards",
-    href: "https://safety360docs.com/safe-predict/hazards",
-    description: "Hazard tracking and leading risk signals.",
+    label: "Crew Competency",
+    href: "https://safepredict-platform.vercel.app/crew",
+    description: "Crew competency matching and qualification gating.",
+    icon: UserRound,
+  },
+  {
+    label: "Observations",
+    href: "https://safepredict-platform.vercel.app/observations",
+    description: "Field observations and leading-indicator capture.",
     icon: FileCheck2,
   },
   {
-    label: "Jobsites",
-    href: "https://safety360docs.com/safe-predict/jobsites",
-    description: "Jobsite records, project context, and safety activity.",
-    icon: HardHat,
+    label: "Incidents",
+    href: "https://safepredict-platform.vercel.app/incidents",
+    description: "Incident reporting with OSHA 1904 recordability.",
+    icon: ShieldAlert,
+  },
+  {
+    label: "OSHA Recordkeeping",
+    href: "https://safepredict-platform.vercel.app/osha",
+    description: "OSHA 300 / 300A log and TRIR, computed and audit-ready.",
+    icon: Scale,
+  },
+  {
+    label: "Permits",
+    href: "https://safepredict-platform.vercel.app/permits",
+    description: "Permit issue, approval, and expiry tracking.",
+    icon: ClipboardCheck,
+  },
+  {
+    label: "Training",
+    href: "https://safepredict-platform.vercel.app/training",
+    description: "Training records, expirations, and competency gaps.",
+    icon: GraduationCap,
+  },
+  {
+    label: "Trends",
+    href: "https://safepredict-platform.vercel.app/trends",
+    description: "Predictive trends and leading risk indicators.",
+    icon: BarChart3,
+  },
+  {
+    label: "Gus AI Analyst",
+    href: "https://safepredict-platform.vercel.app/gus",
+    description: "AI safety analyst answering questions against live site data.",
+    icon: Sparkles,
   },
 ];
 
@@ -155,7 +179,7 @@ export default function DemoShowcasePage() {
   const deckPdfPath = isConstruction ? "/demo-deck.pdf" : "/maco-demo-deck.pdf";
   const slidePath = isConstruction ? "/demo-deck-slides" : "/maco-demo-deck-slides";
   const totalPages = isConstruction ? 29 : 17;
-  const platformLabel = isConstruction ? "SafetyDocs360 demo links" : "MACO demo links";
+  const platformLabel = isConstruction ? "SafePredict demo links" : "MACO demo links";
 
   return (
     <div className="demo-showcase">
