@@ -83,7 +83,7 @@ const navGroups = [
       // Same module key as Active Companies (active_companies already maps
       // /employee/clients by path prefix), so this widens nothing — it only
       // surfaces the directory that reaches every stage rather than the last two.
-      { href: "/employee/clients", label: "Companies", icon: Building2 },
+      { href: "/employee/clients", label: "Client Lifecycle", icon: Building2 },
       { href: "/employee/proposals", label: "Proposals", icon: ScrollText },
       { href: "/employee/active-companies", label: "Active Companies", icon: Gauge },
       { href: "/employee/demo-showcase", label: "Demo Showcase", icon: Presentation },

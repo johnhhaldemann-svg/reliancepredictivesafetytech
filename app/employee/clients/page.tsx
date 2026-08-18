@@ -105,7 +105,7 @@ export default async function ClientsDirectoryPage({
       <div className="portal-topline">
         <div>
           <div className="eyebrow">Commercial</div>
-          <h1>Companies</h1>
+          <h1>Client Lifecycle</h1>
           <p>Every company at every stage, from first lead to renewal. Search by name, contact, email, or owner.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

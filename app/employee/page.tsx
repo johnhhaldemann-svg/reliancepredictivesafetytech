@@ -83,17 +83,6 @@ const moduleGroups = [
   },
 ];
 
-const commercialFocusStages = [
-  "Lead",
-  "First Pitch",
-  "Demo Scheduled",
-  "Proposal Sent",
-  "Legal Review",
-  "Signed / Won",
-  "Onboarding",
-  "Active Company",
-] as const;
-
 function formatDate(value: string | null | undefined) {
   if (!value) {
     return "No due date";
@@ -425,7 +414,7 @@ export default async function EmployeeDashboardPage() {
     {
       href: "/employee/clients",
       icon: Building2,
-      title: "3. Companies",
+      title: "3. Client Lifecycle",
       description: "Open a record to run the whole deal from one screen",
       variant: "default",
     },
@@ -585,7 +574,6 @@ export default async function EmployeeDashboardPage() {
           </div>
           <div className="pipeline-summary">
             {pipelineRows
-              .filter((item) => commercialFocusStages.includes(item.stage as (typeof commercialFocusStages)[number]))
               .map((item) => (
                 <div className="pipeline-summary-row" key={item.stage}>
                   <span>{item.stage}</span>
