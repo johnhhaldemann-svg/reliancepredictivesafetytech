@@ -62,7 +62,7 @@ describe("routing and labels", () => {
 
 describe("cookie", () => {
   it("is named once, so the reader and the writer cannot drift", () => {
-    expect(dashboardCookieName).toBe("siq_dashboard");
+    expect(dashboardCookieName).toBe("rpst_dashboard");
   });
 
   it("is site-wide, long-lived and carries no auth weight", () => {

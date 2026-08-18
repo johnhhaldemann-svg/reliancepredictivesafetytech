@@ -17,7 +17,12 @@
  * lifecycle and proposal modules already use.
  */
 
-export const dashboardCookieName = "siq_dashboard";
+/**
+ * Prefixed rpst for Reliance Predictive Safety Technologies — this internal
+ * platform. Not siq: SafetyIQ is the separate MACO / BIO product line, and
+ * nothing in this repo belongs to it.
+ */
+export const dashboardCookieName = "rpst_dashboard";
 
 /** A year. The choice should outlive a browser restart. */
 export const dashboardCookieMaxAge = 60 * 60 * 24 * 365;
