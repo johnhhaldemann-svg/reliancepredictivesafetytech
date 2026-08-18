@@ -468,7 +468,7 @@ export function ClientDetailManager({
         </div>
       </form>
 
-      <section className="table-card">
+      <section className="table-card" id="current-step">
         <div className="checklist-section">
           <div className="stage-workspace-head">
             <div>

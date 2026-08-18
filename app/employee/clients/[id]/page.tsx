@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ClientLifecycleStepper } from "@/components/clients/ClientLifecycleStepper";
 import { ClientDetailManager } from "@/components/ClientDetailManager";
 import {
   CompanyAddressAndContacts,
@@ -148,6 +149,14 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
           Back to pipeline
         </Link>
       </div>
+      {/* Where this deal actually is, above everything else. The record held
+          the whole lifecycle already, but the stage was one grey word in the
+          subtitle and the work sat five screens down. */}
+      <ClientLifecycleStepper
+        currentStage={(client.lifecycle_stage ?? null) as string | null}
+        items={(items ?? []) as ClientOnboardingItem[]}
+      />
+
       {/* Above the rest of the record: this is what every proposal for this
           company pulls its Prepared For block from, and it was the one thing
           the company record could not hold. */}

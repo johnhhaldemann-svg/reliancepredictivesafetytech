@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { validateAIOutput } from "@/lib/ai/gateway";
+import { dropDisallowedPatchValues } from "@/lib/ai/patch-values";
 import { generateWorkflowNotificationsForUser } from "@/lib/notifications/rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -63,9 +64,15 @@ function cleanPatch(targetTable: string, proposedPatch: unknown) {
   }
 
   const allowedColumns = proposalPatchAllowList[targetTable] ?? [];
-  return Object.fromEntries(
+  const columnFiltered = Object.fromEntries(
     Object.entries(proposedPatch as Record<string, unknown>).filter(([key]) => allowedColumns.includes(key)),
   );
+
+  // The allowlist above gates which COLUMNS may be written. It never gated
+  // the VALUE, which is how a company came to sit on the stage "Invoicing" —
+  // not one of the twelve, so it gets no column on the board and no match in
+  // the directory filter. An out-of-range enum value is dropped here.
+  return dropDisallowedPatchValues(targetTable, columnFiltered).patch;
 }
 
 export async function generateMyWorkflowNotifications() {
