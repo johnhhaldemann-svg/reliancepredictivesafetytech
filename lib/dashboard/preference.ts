@@ -43,8 +43,8 @@ const variantPaths: Record<DashboardVariant, string> = {
 };
 
 const variantLabels: Record<DashboardVariant, string> = {
-  focus: "Focus dashboard",
-  classic: "Classic dashboard",
+  focus: "Focus",
+  classic: "Classic",
 };
 
 function isDashboardVariant(value: unknown): value is DashboardVariant {

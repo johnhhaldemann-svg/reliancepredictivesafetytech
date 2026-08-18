@@ -8889,39 +8889,59 @@ a.platform-card:hover {
    variables (--portal-gold, --portal-gold-bright, --portal-muted). Severity is
    never carried by colour alone: every coloured dot sits beside a pill that
    says the same thing in words. Every class here is namespaced .focus-* or
-   .dashboard-switch-*, so nothing can collide with the classic dashboard. */
+   .dashboard-tab*, so nothing can collide with the classic dashboard. */
 
-.dashboard-switch {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
+.dashboard-tabs {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #eceef1;
 }
 
-.dashboard-switch-current {
+.dashboard-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  min-height: 32px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
   color: var(--portal-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
 }
 
-.dashboard-switch-tag {
+.dashboard-tab:hover:not(:disabled) {
+  color: #1a1a1a;
+}
+
+/* The tab you are on: white, dark text, and not pressable. Marked with
+   aria-current="page" as well, so it is not colour alone. */
+.dashboard-tab.is-current {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.12);
+  cursor: default;
+}
+
+.dashboard-tab:disabled {
+  opacity: 1;
+}
+
+.dashboard-tab-tag {
   border-radius: 4px;
   background: var(--portal-gold);
   color: #231a05;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 850;
   letter-spacing: 0.08em;
   padding: 1px 5px;
   text-transform: uppercase;
-}
-
-.dashboard-switch-button {
-  min-height: 36px;
-  padding: 0 13px;
-  font-size: 0.82rem;
 }
 
 .focus-topline {

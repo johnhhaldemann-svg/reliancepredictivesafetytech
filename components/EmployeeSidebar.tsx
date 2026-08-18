@@ -29,6 +29,7 @@ import {
   Inbox,
   KanbanSquare,
   LayoutDashboard,
+  Sparkles,
   LayoutTemplate,
   ListChecks,
   LogOut,
@@ -58,6 +59,9 @@ const navGroups = [
     label: "Command",
     items: [
       { href: "/employee", label: "Dashboard", icon: LayoutDashboard },
+      // Same module key as Dashboard (the catalog maps /employee/home under it),
+      // so this widens nothing — it only makes the second dashboard findable.
+      { href: "/employee/home", label: "Focus Dashboard", icon: Sparkles },
       { href: "/m", label: "Mobile App", icon: Smartphone },
       { href: "/employee/ai", label: "AI Command", icon: Bot },
       { href: "/employee/website-operations", label: "Website Ops", icon: Globe2 },

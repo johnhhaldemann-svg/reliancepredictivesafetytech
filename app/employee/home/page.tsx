@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import {
   AlertTriangle,
   ArrowRight,
@@ -17,7 +16,6 @@ import { lifecycleStages } from "@/lib/company-data";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessEmployeePath, hasFullPortalVisibility, isPortalOwnerRole } from "@/lib/user-management";
 import { DashboardSwitch } from "@/components/dashboard/DashboardSwitch";
-import { dashboardCookieName, parseDashboardVariant } from "@/lib/dashboard/preference";
 import {
   collapseQueue,
   countByWorkspace,
@@ -99,14 +97,11 @@ export default async function FocusDashboardPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const cookieStore = await cookies();
-  const variant = parseDashboardVariant(cookieStore.get(dashboardCookieName)?.value);
-
-  // Someone who has switched back to classic should not be able to sit on this
-  // route by bookmark and think they never switched.
-  if (variant === "classic") {
-    redirect("/employee");
-  }
+  // No cookie read here on purpose. This route does not bounce a visitor whose
+  // preference is classic — it is a nav destination in its own right, so anyone
+  // can look at the Focus dashboard without committing to it. The tab strip
+  // marks where you ARE, not what you last chose, and the preference is written
+  // only when a tab is pressed.
 
   const { q } = await searchParams;
   const activeFilter = parseQueueFilter(q);
