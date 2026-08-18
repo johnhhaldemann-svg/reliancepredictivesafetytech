@@ -124,6 +124,7 @@ const workspaces = [
         label: "Money",
         items: [
           { href: "/employee/finance", label: "Finance Center", icon: DollarSign, financeOnly: true },
+          { href: "/employee/invoices", label: "Invoices", icon: ReceiptText },
           { href: "/employee/grants", label: "Grant Tracker", icon: HandCoins },
           { href: "/employee/reports", label: "Reports", icon: BarChart2 },
         ],
