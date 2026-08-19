@@ -51,7 +51,7 @@ export function ProposalCreateForm({
     () => clients.find((client) => client.id === clientId) ?? null,
     [clients, clientId],
   );
-  const existingCode = (selectedClient?.client_code ?? "").trim().toUpperCase();
+  const existingCode = (selectedClient?.client_code ?? "").trim();
   const needsCode = selectedClient !== null && existingCode === "";
 
   // A locked company needs its code suggestion at first paint — there is no
@@ -186,17 +186,16 @@ export function ProposalCreateForm({
             <input
               id="client_code"
               value={codeDraft}
-              onChange={(event) => setCodeDraft(event.target.value.toUpperCase())}
-              maxLength={3}
-              pattern="[A-Za-z]{2,3}"
+              onChange={(event) => setCodeDraft(event.target.value)}
+              maxLength={24}
+              pattern="[A-Za-z][A-Za-z0-9]{1,23}"
               title={clientCodeRule}
-              placeholder="e.g. HUN"
-              style={{ textTransform: "uppercase", letterSpacing: "0.12em" }}
+              placeholder="e.g. Wondfo"
               required
             />
             <p style={{ color: "var(--portal-muted)", fontSize: "0.85rem", marginTop: 4 }}>
               First proposal for this company — you assign its code ({clientCodeRule}) and this document becomes{" "}
-              {formatClientProposalNumber(codeDraft || "SE", 1)}. The code is checked for uniqueness and stays fixed.
+              {formatClientProposalNumber(codeDraft || "Wondfo", 1)}. The code is checked for uniqueness and stays fixed.
             </p>
           </div>
         ) : existingCode !== "" ? (

@@ -57,6 +57,8 @@ import { computeProposalTotals } from "@/lib/proposals/pricing";
 import { proposalStatuses, type ProposalStatus } from "@/lib/proposals/types";
 import { fileAcceptedProposalPdf } from "@/lib/proposals/acceptance-filing";
 import { notifyProposalEventById } from "@/lib/proposals/notifications-server";
+import { sendProposalShareEmail } from "@/lib/proposals/client-email-server";
+import { parseClientContacts } from "@/lib/proposals/client-contacts";
 import { recordAcceptanceIncome } from "@/lib/proposals/acceptance-income";
 import { sendProposalForDocusign } from "@/lib/proposals/docusign";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
@@ -1077,6 +1079,12 @@ export interface CreateShareLinkInput {
   revisionId: string;
   /** Clamped to 1–180 days. */
   expiresInDays?: number;
+  /**
+   * When true, the link is also emailed to every client contact saved on this
+   * revision — the step that actually puts it in the client's inbox, rather
+   * than leaving it to an employee to copy and paste by hand.
+   */
+  emailToClient?: boolean;
 }
 
 export interface CreateShareLinkResult extends ActionResult {
@@ -1089,6 +1097,13 @@ export interface CreateShareLinkResult extends ActionResult {
   url?: string;
   linkId?: string;
   expiresAt?: string;
+  /** Set when emailToClient was requested and delivered — the addresses it reached. */
+  emailedTo?: string[];
+  /**
+   * Set when emailToClient was requested but delivery failed. The link itself
+   * still exists (ok is still true) — the caller falls back to copy/paste.
+   */
+  emailError?: string;
 }
 
 export async function createProposalShareLink(
@@ -1167,13 +1182,50 @@ export async function createProposalShareLink(
     { share_link_id: created.id, revision_number: revision.revision_number, expires_at: expiresAt, expires_in_days: days },
   );
 
+  const url = buildShareLinkUrl(await shareLinkOrigin(), token);
+
+  let emailedTo: string[] | undefined;
+  let emailError: string | undefined;
+  if (input.emailToClient) {
+    const state = revision.form_data as GeneratorState;
+    const { data: numbered } = await supabase
+      .from("client_proposals")
+      .select("proposal_number")
+      .eq("id", proposalId)
+      .maybeSingle();
+
+    const sent = await sendProposalShareEmail({
+      recipients: parseClientContacts(state.fields),
+      title: proposal.title,
+      proposalNumber: (numbered?.proposal_number as string | null) ?? null,
+      url,
+      expiresAt,
+    });
+    emailedTo = sent.emailed;
+    emailError = sent.ok ? undefined : sent.error;
+
+    await recordProposalAudit(
+      role,
+      "update",
+      proposalId,
+      userId,
+      sent.ok
+        ? `Emailed the client share link for "${proposal.title}" to ${sent.emailed.join(", ")}`
+        : `Tried to email the client share link for "${proposal.title}" but it failed: ${sent.error}`,
+      null,
+      { share_link_id: created.id, emailed_to: sent.emailed },
+    );
+  }
+
   revalidateProposals(proposalId);
   return {
     ok: true,
     token,
-    url: buildShareLinkUrl(await shareLinkOrigin(), token),
+    url,
     linkId: created.id,
     expiresAt,
+    emailedTo,
+    emailError,
   };
 }
 

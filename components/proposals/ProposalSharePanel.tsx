@@ -13,7 +13,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Copy, Link2, Ban, Eye } from "lucide-react";
+import { AlertTriangle, Copy, Link2, Ban, Eye, Mail } from "lucide-react";
 import { createProposalShareLink, revokeProposalShareLink } from "@/app/employee/proposals/actions";
 import {
   defaultShareLinkDays,
@@ -84,26 +84,39 @@ export function ProposalSharePanel({
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
   const [issued, setIssued] = useState<{ url: string; expiresAt?: string } | null>(null);
+  const [emailedTo, setEmailedTo] = useState<string[] | null>(null);
 
   const shareable = revisions.filter((revision) => revision.hasContent);
   const [revisionId, setRevisionId] = useState(shareable[0]?.id ?? "");
   const [days, setDays] = useState(String(defaultShareLinkDays));
 
-  function create() {
+  function create(emailToClient: boolean) {
     setError("");
     setNotice("");
     setCopied(false);
+    setEmailedTo(null);
     startTransition(async () => {
       const result = await createProposalShareLink(proposalId, {
         revisionId,
         expiresInDays: Number(days),
+        emailToClient,
       });
       if (!result.ok || !result.url) {
         setError(result.error ?? "Failed to create the share link.");
         return;
       }
-      // The ONLY moment this value exists outside the client's inbox.
       setIssued({ url: result.url, expiresAt: result.expiresAt });
+      if (emailToClient) {
+        if (result.emailedTo && result.emailedTo.length > 0) {
+          setNotice(`Emailed to ${result.emailedTo.join(", ")}.`);
+          setEmailedTo(result.emailedTo);
+        } else {
+          setError(
+            result.emailError ??
+              "The link was created but could not be emailed — copy it below and send it yourself.",
+          );
+        }
+      }
       router.refresh();
     });
   }
@@ -157,7 +170,8 @@ export function ProposalSharePanel({
           style={{ marginTop: 12, borderLeft: "3px solid var(--portal-gold)" }}
         >
           <strong style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <AlertTriangle size={16} color="var(--portal-gold)" /> Copy this link now — you will not see it again.
+            <AlertTriangle size={16} color="var(--portal-gold)" />
+            {emailedTo ? "Emailed — keep this copy too, you will not see it again." : "Copy this link now — you will not see it again."}
           </strong>
           <p style={{ color: "var(--portal-muted)", fontSize: "0.85rem", margin: "8px 0" }}>
             Only a one-way hash of the link is stored, so it cannot be shown again by anyone, including an
@@ -233,16 +247,29 @@ export function ProposalSharePanel({
                   onChange={(event) => setDays(event.target.value)}
                 />
               </div>
-              <div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   className="button button-primary"
                   type="button"
                   disabled={isPending || !revisionId}
-                  onClick={create}
+                  onClick={() => create(true)}
                 >
-                  <Link2 size={16} /> {isPending ? "Creating…" : "Create share link"}
+                  <Mail size={16} /> {isPending ? "Sending…" : "Email link to client"}
+                </button>
+                <button
+                  className="button button-light"
+                  type="button"
+                  disabled={isPending || !revisionId}
+                  onClick={() => create(false)}
+                >
+                  <Link2 size={16} /> {isPending ? "Creating…" : "Create link only"}
                 </button>
               </div>
+              <p style={{ color: "var(--portal-muted)", fontSize: "0.8rem", margin: 0 }}>
+                Emailing sends the link to every client contact saved on this revision. Use &quot;Create link
+                only&quot; to copy it yourself instead — for a text message, a phone call follow-up, or a contact
+                with no email on file.
+              </p>
             </div>
           )
         ) : (

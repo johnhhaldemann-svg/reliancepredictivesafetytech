@@ -1,24 +1,25 @@
-// The client-code moniker behind per-client proposal numbers (HUN-01).
+// The client-code moniker behind per-client document numbers (Wondfo-2026-001).
 //
 // Pure functions only — no Supabase, no I/O — importable from both the client
 // forms and the server actions. The database side is
-// supabase/migrations/20260809200000_client_proposal_client_codes.sql: the
-// CHECK constraint there and `clientCodePattern` here must agree.
+// supabase/migrations/20260819134239_client_document_numbering.sql: the CHECK
+// constraint there and `clientCodePattern` here must agree.
 //
-// Decision of record (build review, 2026-08-07): a 2–3 letter moniker from the
-// company name, assigned by whoever writes the client's first proposal, unique
-// across clients; on an initials collision the code is extended (Staff Electric
-// Company Incorporated → SEC), and the state initial is never used. Proposal
-// numbers are then CODE-NN with a per-client sequence.
+// Decision of record (build review, 2026-08-19): the code moved from a 2-3
+// letter shouted abbreviation (WFU) to the moniker people actually use for the
+// company (Wondfo), case preserved as typed. Assigned by whoever writes the
+// client's first proposal, unique across clients (case-insensitively).
+// Document numbers are CODE-YYYY-NNN, restarting the sequence each January.
 
 /** Mirrors company_clients_client_code_format in the migration. */
-export const clientCodePattern = /^[A-Z]{2,3}$/;
+export const clientCodePattern = /^[A-Za-z][A-Za-z0-9]{1,23}$/;
 
-export const clientCodeRule = "2–3 capital letters from the company name, e.g. HUN for Hunzinger.";
+export const clientCodeRule =
+  "2–24 letters or numbers, starting with a letter — the moniker people actually use for this company, e.g. Wondfo. Case is kept as typed.";
 
-/** Uppercases and trims; returns "" for non-strings. Does NOT validate. */
+/** Trims; returns "" for non-strings. Case is preserved. Does NOT validate. */
 export function normalizeClientCode(value: unknown): string {
-  return typeof value === "string" ? value.trim().toUpperCase() : "";
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export function isValidClientCode(value: unknown): boolean {
@@ -26,34 +27,33 @@ export function isValidClientCode(value: unknown): boolean {
 }
 
 /**
- * CODE-NN, zero-padded to two digits.
+ * CODE-YYYY-NNN, zero-padded to three digits, defaulting to the current year.
  *
- * greatest(2, …) in SQL and this guard are the same rule: past sequence 99 the
- * number simply grows (HUN-100) — a bare two-char pad would TRUNCATE and mint a
- * duplicate reference.
+ * greatest(3, …) in SQL and this guard are the same rule: past sequence 999 the
+ * number simply grows (Wondfo-2026-1000) — a bare three-char pad would
+ * TRUNCATE and mint a duplicate reference.
  */
-export function formatClientProposalNumber(code: string, seq: number): string {
+export function formatClientProposalNumber(code: string, seq: number, year: number = new Date().getFullYear()): string {
   const n = Math.max(1, Math.trunc(seq));
-  return `${normalizeClientCode(code)}-${String(n).padStart(2, "0")}`;
+  return `${normalizeClientCode(code)}-${year}-${String(n).padStart(3, "0")}`;
 }
 
+/** Alphanumeric runs that start with a letter — the only shape a code can be. */
 function nameWords(name: string): string[] {
   return name
-    .toUpperCase()
-    .split(/[^A-Z]+/)
-    .filter((word) => word !== "");
+    .split(/[^A-Za-z0-9]+/)
+    .filter((word) => word !== "" && /^[A-Za-z]/.test(word));
 }
 
 /**
  * A suggested moniker for a company name — a starting point the assigner can
  * overtype, never an automatic assignment.
  *
- * The ladder mirrors how the team said they would pick codes by hand: initials
- * first (Staff Electric → SE), extend through a third word on collision
- * (Staff Electric Company → SEC), then fall back to prefixes of the first word.
- * Single-word names prefer the 3-letter prefix (Hunzinger → HUN) because a
- * 2-letter fragment of one word reads as an abbreviation of nothing.
- * Returns "" when the name yields no valid, untaken candidate.
+ * The moniker is the name people actually use for the company, not initials:
+ * "Wondfo USA" suggests "Wondfo". On a collision it falls back to the first
+ * two words joined ("StaffElectric"), then a numbered variant of the first
+ * word ("Wondfo2"). Case is taken as typed in the company name. Returns "" when
+ * the name yields no valid, untaken candidate.
  */
 export function suggestClientCode(name: unknown, taken: Iterable<string> = []): string {
   if (typeof name !== "string") return "";
@@ -61,22 +61,19 @@ export function suggestClientCode(name: unknown, taken: Iterable<string> = []): 
   if (words.length === 0) return "";
 
   const takenSet = new Set<string>();
-  for (const code of taken) takenSet.add(normalizeClientCode(code));
-
-  const candidates: string[] = [];
-  if (words.length >= 2) {
-    candidates.push(words[0][0] + words[1][0]);
-    if (words.length >= 3) candidates.push(words[0][0] + words[1][0] + words[2][0]);
-    candidates.push(words[0][0] + words[1].slice(0, 2));
+  for (const code of taken) {
+    const normalized = normalizeClientCode(code).toLowerCase();
+    if (normalized) takenSet.add(normalized);
   }
-  if (words.length === 1) {
-    candidates.push(words[0].slice(0, 3), words[0].slice(0, 2));
-  } else {
-    candidates.push(words[0].slice(0, 2), words[0].slice(0, 3));
+
+  const candidates: string[] = [words[0].slice(0, 24)];
+  if (words.length >= 2) candidates.push(`${words[0]}${words[1]}`.slice(0, 24));
+  for (let suffix = 2; suffix <= 9; suffix += 1) {
+    candidates.push(`${words[0].slice(0, 23)}${suffix}`);
   }
 
   for (const candidate of candidates) {
-    if (clientCodePattern.test(candidate) && !takenSet.has(candidate)) return candidate;
+    if (clientCodePattern.test(candidate) && !takenSet.has(candidate.toLowerCase())) return candidate;
   }
   return "";
 }
