@@ -15,6 +15,7 @@ export interface InvoiceDocumentLine {
 
 export interface InvoiceDocumentModel {
   invoiceNumber: string;
+  proposalNumber: string | null;
   statusLabel: string;
   kindLabel: string;
   issueDate: string | null;
@@ -94,11 +95,13 @@ export function buildInvoiceDocumentModel(input: {
   billTo: { name: string; address_line1?: string | null; address_line2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null } | null;
   statusLabel: string;
   kindLabel: string;
+  proposalNumber?: string | null;
 }): InvoiceDocumentModel {
   const currency = input.invoice.currency || "USD";
 
   return {
     invoiceNumber: input.invoice.invoice_number ?? "DRAFT",
+    proposalNumber: input.proposalNumber ?? null,
     statusLabel: input.statusLabel,
     kindLabel: input.kindLabel,
     issueDate: formatDate(input.invoice.issue_date),

@@ -150,6 +150,7 @@ export async function renderInvoicePdf(model: InvoiceDocumentModel): Promise<Uin
     metaY -= 14;
   };
   metaRow("Invoice #", model.invoiceNumber);
+  metaRow("Proposal #", model.proposalNumber);
   metaRow("Status", model.statusLabel);
   metaRow("Kind", model.kindLabel);
   metaRow("Issue date", model.issueDate);

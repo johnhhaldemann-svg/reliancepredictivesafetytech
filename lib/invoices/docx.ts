@@ -110,6 +110,7 @@ export async function renderInvoiceDocx(model: InvoiceDocumentModel): Promise<Bu
     new Paragraph({ spacing: { before: 160, after: 160 }, border: { bottom: { color: GOLD, size: 6, style: "single", space: 1 } }, children: [] }),
 
     para(`Invoice #: ${model.invoiceNumber}`, { size: 18 }),
+    metaLine("Proposal #", model.proposalNumber),
     para(`Status: ${model.statusLabel}   ·   Kind: ${model.kindLabel}`, { size: 18 }),
     metaLine("Issue date", model.issueDate),
     metaLine("Due date", model.dueDate),

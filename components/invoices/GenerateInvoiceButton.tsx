@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
 import { generateInvoiceFromProposal } from "@/app/employee/invoices/actions";
@@ -18,17 +18,28 @@ export function GenerateInvoiceButton({ proposalId }: { proposalId: string }) {
   const [kind, setKind] = useState<string>("full");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  // useTransition's isPending only flips on the next render, which leaves a
+  // window for a fast double-click (or a double-fired synthetic event) to
+  // submit twice before the button visually disables. This ref blocks that
+  // synchronously, in the same tick as the click.
+  const submitting = useRef(false);
 
   function submit() {
+    if (submitting.current) return;
+    submitting.current = true;
     setError("");
     startTransition(async () => {
-      const result = await generateInvoiceFromProposal(proposalId, kind);
-      if (!result.ok || !result.invoiceId) {
-        setError(result.error ?? "Could not generate the invoice.");
-        return;
+      try {
+        const result = await generateInvoiceFromProposal(proposalId, kind);
+        if (!result.ok || !result.invoiceId) {
+          setError(result.error ?? "Could not generate the invoice.");
+          return;
+        }
+        setOpen(false);
+        router.push(`/employee/invoices/${result.invoiceId}`);
+      } finally {
+        submitting.current = false;
       }
-      setOpen(false);
-      router.push(`/employee/invoices/${result.invoiceId}`);
     });
   }
 

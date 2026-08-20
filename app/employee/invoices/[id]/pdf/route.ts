@@ -22,13 +22,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { data: invoice } = await (supabase as LooseClient)
     .from("client_invoices")
     .select(
-      "invoice_number, status, kind, issue_date, due_date, currency, subtotal, tax_amount, total, client_id, job_name, consultant_name, payment_terms, client_agreement_ref, prepared_by, notes",
+      "invoice_number, status, kind, issue_date, due_date, currency, subtotal, tax_amount, total, client_id, proposal_id, job_name, consultant_name, payment_terms, client_agreement_ref, prepared_by, notes",
     )
     .eq("id", id)
     .maybeSingle();
   if (!invoice) return new NextResponse("Not found", { status: 404 });
 
-  const [{ data: lines }, { data: client }] = await Promise.all([
+  const [{ data: lines }, { data: client }, { data: proposal }] = await Promise.all([
     supabase
       .from("client_invoice_line_items")
       .select("description, quantity, unit_amount, line_total, unit")
@@ -40,6 +40,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           .select("id, name, address_line1, address_line2, city, state, postal_code, country")
           .eq("id", invoice.client_id)
           .maybeSingle()
+      : Promise.resolve({ data: null }),
+    invoice.proposal_id
+      ? supabase.from("client_proposals").select("proposal_number").eq("id", invoice.proposal_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
@@ -53,6 +56,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       billTo: (client as LooseClient) ?? null,
       statusLabel: invoiceStatusLabel(invoice.status),
       kindLabel: invoiceKindLabel(invoice.kind),
+      proposalNumber: (proposal as LooseClient)?.proposal_number ?? null,
     });
 
     const bytes = await renderInvoicePdf(model);
