@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Download, FileText, PencilLine } from "lucide-react";
 import { getProposalAccess } from "@/lib/proposals/access";
+import { getInvoiceAccess } from "@/lib/invoices/access";
+import { invoiceKindLabel, invoiceStatusLabel } from "@/lib/invoices/invoice";
+import { GenerateInvoiceButton } from "@/components/invoices/GenerateInvoiceButton";
 import { canEditProposalContent, isProposalUuid } from "@/lib/proposals/policy";
 import { isGeneratorState, type GeneratorState } from "@/lib/proposals/generator-state";
 import { computeProposalTotals } from "@/lib/proposals/pricing";
@@ -77,6 +80,18 @@ export default async function ProposalDetailPage({
   ]);
 
   if (!proposal) notFound();
+
+  // Cheap: getSessionContext() is request-memoized, so this only adds the two
+  // finance-specific queries on top of the auth + role lookup already paid for
+  // by getProposalAccess() above.
+  const invoiceAccess = await getInvoiceAccess();
+  const { data: proposalInvoices } = invoiceAccess.canSeeMoney
+    ? await supabase
+        .from("client_invoices")
+        .select("id, invoice_number, status, kind, total, currency")
+        .eq("proposal_id", id)
+        .order("created_at", { ascending: false })
+    : { data: [] };
 
   // ---------------------------------------------------------------------------
   // Share links + acceptance evidence.
@@ -275,8 +290,27 @@ export default async function ProposalDetailPage({
               <PencilLine size={16} /> Edit in generator
             </Link>
           ) : null}
+          {invoiceAccess.canSeeMoney ? <GenerateInvoiceButton proposalId={normalized.id} /> : null}
         </div>
       </div>
+
+      {invoiceAccess.canSeeMoney && (proposalInvoices ?? []).length > 0 ? (
+        <p style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ color: "var(--portal-muted)" }}>Invoices:</span>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(proposalInvoices ?? []).map((invoice: any) => (
+            <Link key={invoice.id} className="grant-pill" href={`/employee/invoices/${invoice.id}`}>
+              {invoice.invoice_number ?? "Draft"} · {invoiceKindLabel(invoice.kind)} ·{" "}
+              {Number(invoice.total ?? 0).toLocaleString("en-US", {
+                style: "currency",
+                currency: invoice.currency ?? "USD",
+                maximumFractionDigits: 2,
+              })}{" "}
+              · {invoiceStatusLabel(invoice.status)}
+            </Link>
+          ))}
+        </p>
+      ) : null}
 
       {lockedMessage ? <div className="success-box portal-alert portal-alert-error">{lockedMessage}</div> : null}
       {!canEdit && !lockedMessage && canManage ? (
