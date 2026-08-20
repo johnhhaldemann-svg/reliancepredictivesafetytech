@@ -1,12 +1,27 @@
-// Shared types for the AI Safety Document Builder module.
+// Shared types for the Document Builder module.
+//
+// The catalog of document kinds lives in lib/documents/generators — this file
+// re-exports the pieces the rest of the app already imports, so adding a
+// generator never means touching a call site.
 
-export const docTypes = ["sop", "policy"] as const;
-export type DocType = (typeof docTypes)[number];
+import { generatorKeys, generatorLabels } from "./generators";
 
-export const docTypeLabels: Record<DocType, string> = {
-  sop: "Standard Operating Procedure",
-  policy: "Policy",
-};
+export type { GeneratorSpec, GeneratorField, GeneratorGroup, DocumentTone } from "./generators";
+export { DEFAULT_TONE, documentTones } from "./generators/types";
+
+/**
+ * A generator key, stored as document_builder_drafts.doc_type. Kept as `string`
+ * rather than a literal union because the registry is data: widening it must
+ * not require a type-level change at every call site. Validate with
+ * isGeneratorKey() at the boundaries instead.
+ */
+export type DocType = string;
+
+/** Every generator key, in registry order. */
+export const docTypes: readonly string[] = generatorKeys;
+
+/** Display labels by generator key. */
+export const docTypeLabels: Readonly<Record<string, string>> = generatorLabels;
 
 // Aligned with lib/legal/types confidenceLevels so the shared ConfidenceBadge renders correctly.
 export const docConfidenceLevels = ["high", "medium", "low", "needs_review"] as const;
@@ -60,6 +75,10 @@ export interface DocumentBuilderInput {
   jurisdiction?: string;
   responsible_role?: string;
   notes?: string;
+  /** Register the document is written in. Defaults to "formal". */
+  tone?: string;
+  /** Generator-specific field values, keyed by GeneratorField.key. */
+  details?: Record<string, string>;
 }
 
 /** Metadata stamped onto rendered PDF/DOCX output. */

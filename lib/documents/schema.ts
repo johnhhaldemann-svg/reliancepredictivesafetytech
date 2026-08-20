@@ -1,6 +1,12 @@
 // Pure (no server-only / OpenAI) helpers for the document generation pipeline so
 // they can be unit-tested directly. The OpenAI orchestration that uses these lives
 // in builder.ts (generateSafetyDocument).
+//
+// The prompt is assembled from three layers, in this order:
+//   1. HOUSE_STYLE       — how every company document is written
+//   2. the tone variant  — which register this one is written in
+//   3. the generator spec — what this document is, and its own drafting rules
+// Nothing about a specific document kind is hardcoded here.
 
 import {
   DEFAULT_DOCUMENT_DISCLAIMER,
@@ -11,50 +17,66 @@ import {
   type DocumentSection,
   type GeneratedDocument,
 } from "./types";
+import {
+  DEFAULT_JURISDICTION_NOTE,
+  HOUSE_STYLE,
+  QUALITY_GATE,
+  coerceTone,
+  coreFields,
+  getGenerator,
+  toneDescriptors,
+  type GeneratorSpec,
+} from "./generators";
 
-const SOP_SECTIONS = [
-  "Purpose",
-  "Scope",
-  "Definitions",
-  "Responsibilities",
-  "Required PPE",
-  "Hazards & Controls",
-  "Procedure (numbered steps)",
-  "Emergency & Reporting",
-  "References",
-  "Revision History",
-];
+function numbered(lines: readonly string[]): string {
+  return lines.map((line) => `  - ${line}`).join("\n");
+}
 
-const POLICY_SECTIONS = [
-  "Purpose",
-  "Scope",
-  "Policy Statement",
-  "Roles & Responsibilities",
-  "Compliance Requirements",
-  "Enforcement & Consequences",
-  "Review Cycle",
-  "References",
-];
+/**
+ * The full instruction block for one generator in one tone. Exported for the
+ * registry test, which renders every spec to catch a generator whose guidance
+ * or section list would produce an unusable prompt.
+ */
+export function documentSystemPrompt(docType: DocType, tone?: string): string {
+  const spec = getGenerator(docType);
+  if (!spec) {
+    // An unregistered key should never reach here — the route validates first —
+    // but a generic instruction beats throwing inside a prompt builder.
+    return `You are a senior safety professional drafting a clear, practical, audit-ready document.\n\nHOUSE STYLE — these rules apply to every document:\n${numbered(HOUSE_STYLE)}`;
+  }
+  return renderSystemPrompt(spec, tone);
+}
 
-export function documentSystemPrompt(docType: DocType): string {
-  const sectionList = (docType === "sop" ? SOP_SECTIONS : POLICY_SECTIONS).map((s) => `  - ${s}`).join("\n");
-  const kind = docType === "sop" ? "Standard Operating Procedure (SOP)" : "workplace safety Policy";
-  return `You are a senior safety professional drafting a clear, practical, audit-ready ${kind} for a workplace safety program.
+function renderSystemPrompt(spec: GeneratorSpec, tone?: string): string {
+  const toneDescriptor = toneDescriptors[coerceTone(tone)];
+  const sectionList = spec.sections.map((section, index) => `  ${index + 1}.0  ${section}`).join("\n");
 
-Write in plain, direct language a frontline worker and a safety manager can both follow. Be specific and actionable — avoid filler and legal boilerplate. Do NOT invent regulatory citations; only reference a standard (e.g. an OSHA section) when you are confident it applies, and otherwise describe the requirement in plain terms.
+  const parts = [
+    `You are a senior safety professional drafting a ${spec.documentKind} for a construction safety program.`,
+    `HOUSE STYLE — these rules apply to every document this company produces:\n${numbered(HOUSE_STYLE)}`,
+    `REGISTER — ${toneDescriptor.label}: ${toneDescriptor.instruction}`,
+    `REQUIRED SECTIONS — produce these in this order, and add others only where genuinely useful:\n${sectionList}`,
+    `DOCUMENT-SPECIFIC RULES:\n${numbered(spec.guidance)}`,
+  ];
 
-Produce the document as an ordered list of sections. Include, at minimum, these sections (add others only if genuinely useful):
-${sectionList}
+  if (spec.fieldUse) {
+    parts.push(
+      "FIELD USE — this document is read standing on a jobsite, not at a desk. Keep lines short, put one requirement per line, and prefer a checkbox line over a paragraph wherever something gets verified.",
+    );
+  }
 
-For each section, write the prose in "body" and put discrete steps, duties, or list items in "items" (use an empty array when a section is purely prose).
-
-Set confidence_level to:
+  parts.push(
+    `For each section, write the prose in "body" and put discrete steps, duties, requirements, or checklist items in "items" (use an empty array when a section is purely prose).`,
+    `Set confidence_level to:
   - high: routine, well-established safety practice you are confident about
-  - medium: generally correct but the site should verify specifics
+  - medium: generally correct but the site shall verify specifics
   - low: depends heavily on site conditions or equipment not fully described
-  - needs_review: involves legal interpretation, engineering judgment, or unclear applicability
+  - needs_review: involves legal interpretation, engineering judgement, or unclear applicability`,
+    `Put anything a qualified human MUST verify before approval into review_notes.`,
+    `Before returning, check the draft against this quality gate and fix anything that fails:\n${numbered(QUALITY_GATE)}`,
+  );
 
-Put anything a qualified human MUST verify before approval into review_notes. This document is a draft for human review — never claim it is final or legally approved.`;
+  return parts.join("\n\n");
 }
 
 function field(description: string, enumValues?: readonly string[]) {
@@ -65,9 +87,9 @@ const sectionSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    heading: field("Section heading, e.g. 'Purpose'"),
+    heading: field("Section heading, e.g. '1.0 Purpose'"),
     body: field("Section prose. Empty string if the section is purely a list."),
-    items: { type: "array", description: "Discrete steps/duties/list items, or empty array", items: { type: "string" } },
+    items: { type: "array", description: "Discrete steps/duties/requirements/checklist items, or empty array", items: { type: "string" } },
   },
   required: ["heading", "body", "items"],
 } as const;
@@ -86,32 +108,45 @@ export const documentResponseSchema = {
   required: ["title", "summary", "sections", "review_notes", "confidence_level", "disclaimer"],
 } as const;
 
-export function buildDocumentPrompt(input: DocumentBuilderInput, clientContextBlock?: string): string {
+/** Renders the author's answers into the request block. Blank answers are omitted entirely. */
+export function buildDocumentRequest(input: DocumentBuilderInput): string {
   const lines: string[] = [];
-  const add = (label: string, value?: string) => {
+  const add = (label: string, value?: string | null) => {
     if (value === undefined || value === null || String(value).trim() === "") return;
-    lines.push(`- ${label}: ${value}`);
+    lines.push(`- ${label}: ${String(value).trim()}`);
   };
-  add("Document title", input.title);
-  add("Industry / operation", input.industry);
-  add("Jurisdiction", input.jurisdiction);
-  add("Scope / activity covered", input.scope);
-  add("Known hazards", input.hazards);
-  add("Responsible role / owner", input.responsible_role);
-  add("Company standards to incorporate", input.company_standards);
-  add("Additional notes", input.notes);
 
-  // The client briefing sits between the system prompt and the request, so the
+  add("Document title", input.title);
+
+  const spec = getGenerator(input.doc_type);
+  // Generator-specific answers come first: they are the substance of the
+  // request, and the core fields qualify them.
+  for (const specField of spec?.fields ?? []) {
+    add(specField.promptLabel ?? specField.label, input.details?.[specField.key]);
+  }
+  for (const core of coreFields) {
+    add(core.promptLabel, input[core.key]);
+  }
+
+  return lines.join("\n");
+}
+
+export function buildDocumentPrompt(input: DocumentBuilderInput, clientContextBlock?: string): string {
+  const spec = getGenerator(input.doc_type);
+
+  // The client briefing sits between the instructions and the request, so the
   // model reads who this is for before what is being asked. Absent when no
   // client was chosen, in which case the prompt is exactly as it was.
   const contextSection = clientContextBlock?.trim() ? `\n\n${clientContextBlock.trim()}` : "";
+  const jurisdictionNote = input.jurisdiction?.trim() ? "" : `\n\n${DEFAULT_JURISDICTION_NOTE}`;
+  const label = spec?.label ?? "document";
 
-  return `${documentSystemPrompt(input.doc_type)}${contextSection}
+  return `${documentSystemPrompt(input.doc_type, input.tone)}${jurisdictionNote}${contextSection}
 
 DOCUMENT REQUEST:
-${lines.join("\n")}
+${buildDocumentRequest(input)}
 
-Draft the complete ${input.doc_type === "sop" ? "SOP" : "Policy"} now as structured sections.`;
+Draft the complete ${label} now as structured sections.`;
 }
 
 // ---- parsing + normalization -------------------------------------------------

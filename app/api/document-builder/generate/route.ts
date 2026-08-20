@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getDocumentAccess } from "@/lib/documents/access";
 import { generateSafetyDocument } from "@/lib/documents/builder";
 import { documentToMarkdown } from "@/lib/documents/schema";
-import { docTypes, type DocType, type DocumentBuilderInput } from "@/lib/documents/types";
+import type { DocType, DocumentBuilderInput } from "@/lib/documents/types";
+import { coerceTone, getGenerator } from "@/lib/documents/generators";
 import { validateAIOutput } from "@/lib/ai/gateway";
 import { getClientContext } from "@/lib/ai/client-context";
 import { applyClientDefaults, renderClientContextBlock } from "@/lib/ai/client-context-prompt";
@@ -24,9 +25,15 @@ export async function POST(req: Request) {
   }
 
   const docType = input.doc_type as DocType;
-  if (!docTypes.includes(docType)) {
-    return NextResponse.json({ error: "doc_type must be 'sop' or 'policy'." }, { status: 400 });
+  // The registry is the only source of valid document kinds. An unknown key is
+  // rejected here rather than at the database CHECK constraint, so the caller
+  // gets a useful message instead of a 500.
+  const spec = getGenerator(docType);
+  if (!spec) {
+    return NextResponse.json({ error: `Unknown document type "${String(docType)}".` }, { status: 400 });
   }
+  // An unrecognised tone falls back to the default rather than failing the run.
+  input = { ...input, tone: coerceTone(input.tone) };
   if (!input.title || !input.title.trim()) {
     return NextResponse.json({ error: "A document title is required." }, { status: 400 });
   }
@@ -76,8 +83,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Document output was blocked by the AI safety gateway." }, { status: 422 });
     }
 
-    // Human Authority Rule: every generated SOP/Policy must be human-reviewed and
-    // approved before it can be published. Always land in needs_review.
+    // Human Authority Rule: every draft lands in the review queue. Whether it can
+    // be published without an explicit approval is the generator's own call —
+    // anything that authorises work, carries legal weight, disciplines a person,
+    // or gets signed in the field sets humanReviewRequired and stays gated.
     const { data: draft, error: draftError } = await supabase
       .from("document_builder_drafts")
       .insert({
@@ -86,8 +95,9 @@ export async function POST(req: Request) {
         title: result.title,
         sections: result.sections,
         body_markdown: markdown,
+        tone: input.tone,
         review_status: "needs_review",
-        human_review_required: true,
+        human_review_required: spec.humanReviewRequired,
         confidence_level: result.confidence_level,
         created_by: userId,
       })
@@ -114,8 +124,15 @@ export async function POST(req: Request) {
       actor_id: userId,
       resource_type: "document_builder_draft",
       resource_id: draft.id,
-      summary: `Generated ${docType.toUpperCase()} draft "${result.title}" (gateway: ${gateway.status})`,
-      after_state: { gatewayStatus: gateway.status, confidence: result.confidence_level, reviewNotes: result.review_notes },
+      summary: `Generated ${spec.label} draft "${result.title}" (gateway: ${gateway.status})`,
+      after_state: {
+        gatewayStatus: gateway.status,
+        confidence: result.confidence_level,
+        reviewNotes: result.review_notes,
+        docType,
+        tone: input.tone,
+        humanReviewRequired: spec.humanReviewRequired,
+      },
     });
 
     return NextResponse.json({ generationId: generation.id, draftId: draft.id, draft, gatewayStatus: gateway.status });

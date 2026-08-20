@@ -39,7 +39,10 @@ export default async function DocumentBuilderPage() {
         <div>
           <div className="eyebrow">AI Document Builder</div>
           <h1>Draft, review, and publish safety documents</h1>
-          <p>Generate SOPs and Policies with AI, review them, then publish to the Master Document Library as PDF + Word.</p>
+          <p>
+            JSAs, DAPs, permits, safety plans, audits, contracts and HR documents. Draft one with AI, review it,
+            then publish to the Master Document Library as PDF + Word.
+          </p>
         </div>
       </div>
 
