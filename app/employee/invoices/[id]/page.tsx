@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ChevronLeft } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Download, FileText } from "lucide-react";
 import { getInvoiceAccess } from "@/lib/invoices/access";
 import { invoiceKindLabel, invoiceStatusLabel, invoiceStatusTone } from "@/lib/invoices/invoice";
 import { InvoiceHeaderForm } from "@/components/invoices/InvoiceHeaderForm";
 import { InvoiceLineItemsEditor, type EditableLine } from "@/components/invoices/InvoiceLineItemsEditor";
+import { InvoiceDeleteButton } from "@/components/invoices/InvoiceDeleteButton";
 import { proposalLabel, type ProposalRow } from "@/lib/invoices/proposal-link";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,7 +22,7 @@ function isUuid(value: string) {
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { supabase, canSeeMoney, isAdmin } = await getInvoiceAccess();
+  const { supabase, userId, canSeeMoney, isAdmin } = await getInvoiceAccess();
   if (!supabase || !isUuid(id)) notFound();
 
   if (!canSeeMoney) {
@@ -42,7 +43,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { data: invoice } = await (supabase as LooseClient)
     .from("client_invoices")
     .select(
-      "id, client_id, proposal_id, invoice_number, status, kind, issue_date, due_date, currency, subtotal, tax_amount, total, job_name, consultant_name, payment_terms, client_agreement_ref, prepared_by, notes, void_reason",
+      "id, client_id, proposal_id, invoice_number, status, kind, issue_date, due_date, currency, subtotal, tax_amount, total, job_name, consultant_name, payment_terms, client_agreement_ref, prepared_by, notes, void_reason, created_by",
     )
     .eq("id", id)
     .maybeSingle();
@@ -100,7 +101,13 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             </p>
           ) : null}
         </div>
-        <div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <a className="button button-light" href={`/employee/invoices/${invoice.id}/pdf`} download>
+            <Download size={16} /> Download PDF
+          </a>
+          <a className="button button-light" href={`/employee/invoices/${invoice.id}/docx`} download>
+            <FileText size={16} /> Download DOCX
+          </a>
           <span className="badge">{formatMoney(Number(invoice.total ?? 0), invoice.currency)}</span>
         </div>
       </div>
@@ -140,6 +147,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           }}
         />
       </div>
+
+      {isAdmin || (isDraft && invoice.created_by === userId) ? (
+        <InvoiceDeleteButton invoiceId={invoice.id} invoiceNumber={invoice.invoice_number ?? "this draft"} />
+      ) : null}
     </>
   );
 }

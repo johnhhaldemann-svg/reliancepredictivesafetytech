@@ -263,7 +263,9 @@ export default async function InvoicesPage() {
                       <article className="grant-row" key={row.id}>
                         <div className="grant-row-head">
                           <div>
-                            <h3>{row.invoice_number ?? "Unnumbered draft"}</h3>
+                            <h3>
+                              <Link href={`/employee/invoices/${row.id}`}>{row.invoice_number ?? "Unnumbered draft"}</Link>
+                            </h3>
                             <p className="grant-row-agency">
                               {(row.client_id && clientName.get(row.client_id)) || "No client linked"}
                               {row.job_name ? ` · ${row.job_name}` : ""}
@@ -328,6 +330,18 @@ export default async function InvoicesPage() {
                         ) : (
                           <p className="grant-source">Not linked to a proposal</p>
                         )}
+
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                          <Link className="button button-light" href={`/employee/invoices/${row.id}`}>
+                            View / edit
+                          </Link>
+                          <a className="button button-light" href={`/employee/invoices/${row.id}/pdf`} download>
+                            PDF
+                          </a>
+                          <a className="button button-light" href={`/employee/invoices/${row.id}/docx`} download>
+                            DOCX
+                          </a>
+                        </div>
                       </article>
                     );
                   })}

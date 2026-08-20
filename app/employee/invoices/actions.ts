@@ -178,3 +178,46 @@ export async function updateInvoiceLines(invoiceId: string, lines: DraftInvoiceL
   revalidateInvoices(invoiceId, before.proposal_id as string | null);
   return { ok: true };
 }
+
+/**
+ * Matches client_invoices' DELETE policy: an admin can delete any invoice; a
+ * non-admin can only delete their own, and only while it is still a draft.
+ * Checked here for a clear message, then enforced again by RLS regardless.
+ */
+export async function deleteInvoice(invoiceId: string): Promise<ActionResult> {
+  const { supabase, userId, role, canSeeMoney, isAdmin } = await getInvoiceAccess();
+  if (!supabase || !userId) return { ok: false, error: "You must be signed in." };
+  if (!canSeeMoney) return { ok: false, error: "Invoices are restricted to finance-authorised users and owners." };
+
+  const { data: before } = await supabase
+    .from("client_invoices")
+    .select("id, invoice_number, status, created_by, proposal_id")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!before) return { ok: false, error: NO_ROWS_MESSAGE };
+
+  const canDelete = isAdmin || (before.status === "draft" && before.created_by === userId);
+  if (!canDelete) {
+    return { ok: false, error: "Only an admin, or the draft's own creator, can delete this invoice." };
+  }
+
+  const { data: deleted, error } = await supabase.from("client_invoices").delete().eq("id", invoiceId).select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!deleted || deleted.length === 0) return { ok: false, error: NO_ROWS_MESSAGE };
+
+  await recordAuditEvent({
+    ...buildDataAuditEvent(
+      "delete",
+      "client_invoice",
+      invoiceId,
+      userId,
+      `Deleted invoice ${before.invoice_number ?? invoiceId}.`,
+      before,
+      null,
+    ),
+    actor_role: role,
+  });
+
+  revalidateInvoices(invoiceId, before.proposal_id as string | null);
+  return { ok: true };
+}
