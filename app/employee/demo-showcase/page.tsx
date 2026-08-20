@@ -178,7 +178,7 @@ export default function DemoShowcasePage() {
   const deckTitle = isConstruction ? "SafePredict demo deck" : "MACO demo deck";
   const deckPdfPath = isConstruction ? "/demo-deck.pdf" : "/maco-demo-deck.pdf";
   const slidePath = isConstruction ? "/demo-deck-slides" : "/maco-demo-deck-slides";
-  const totalPages = isConstruction ? 19 : 17;
+  const totalPages = isConstruction ? 15 : 17;
   const platformLabel = isConstruction ? "SafePredict demo links" : "MACO demo links";
 
   return (
