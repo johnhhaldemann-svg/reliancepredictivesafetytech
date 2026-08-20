@@ -2996,6 +2996,15 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ document.body.classList.remove("guide-on"); hideSpot(); }
 });
 
+(function deepLink(){
+  const target=(location.hash||"").slice(1);
+  const validIds=NAV.flatMap(g=>g.items.map(i=>i.id));
+  if(target && validIds.includes(target)){
+    $("boot").classList.add("off"); $("shell").classList.add("on");
+    S.tour=-1; document.body.classList.remove("guide-on"); hideSpot();
+    S.role="sm"; S.view=target;
+  }
+})();
 render();
 </script>
 </body>
