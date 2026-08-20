@@ -137,4 +137,56 @@ describe("buildFullLines — itemizes a full invoice from the proposal's own fee
     expect(result.lines[0].line_total).toBe(500);
     expect(result.tax).toBe(50);
   });
+
+  it("prints a catalog service's category above its name, e.g. Training over the course name", () => {
+    const t = totals({
+      lineItems: [
+        line({ source: "service", key: "firstAid", name: "First Aid / CPR / AED Training", unit: "Person", qty: 1, price: 145, amount: 145 }),
+        line({ source: "service", key: "bbp", name: "Bloodborne Pathogens Training", unit: "Session", qty: 1, price: 400, amount: 400 }),
+      ],
+      subtotal: 545,
+      total: 545,
+    });
+
+    const result = buildFullLines(t, "ref");
+
+    expect(result.lines[0].description).toBe("Training\nFirst Aid / CPR / AED Training");
+    expect(result.lines[1].description).toBe("Training\nBloodborne Pathogens Training");
+  });
+
+  it("labels the catalog's own 'Custom Service Line' entry as Service, not Training", () => {
+    const t = totals({
+      lineItems: [line({ source: "service", key: "custom", name: "Bespoke Consulting Engagement", unit: "", qty: 1, price: 500, amount: 500 })],
+      subtotal: 500,
+      total: 500,
+    });
+
+    const result = buildFullLines(t, "ref");
+
+    expect(result.lines[0].description).toBe("Service\nBespoke Consulting Engagement");
+  });
+
+  it("stays a single line for a service key that resolves to nothing in the catalog", () => {
+    const t = totals({
+      lineItems: [line({ source: "service", key: "not-a-real-key", name: "Whatever The Seller Typed", unit: "", qty: 1, price: 500, amount: 500 })],
+      subtotal: 500,
+      total: 500,
+    });
+
+    const result = buildFullLines(t, "ref");
+
+    expect(result.lines[0].description).toBe("Whatever The Seller Typed");
+  });
+
+  it("stays a single line for a package or phase row, which carries no catalog group", () => {
+    const t = totals({
+      lineItems: [line({ source: "package", key: "growth", name: "Growth Plan", unit: "", qty: 1, price: 1000, amount: 1000 })],
+      subtotal: 1000,
+      total: 1000,
+    });
+
+    const result = buildFullLines(t, "ref");
+
+    expect(result.lines[0].description).toBe("Growth Plan");
+  });
 });

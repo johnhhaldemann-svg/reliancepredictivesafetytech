@@ -15,9 +15,42 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGeneratorState } from "@/lib/proposals/generator-state";
-import { computeProposalTotals, type ProposalTotals } from "@/lib/proposals/pricing";
+import { computeProposalTotals, type ProposalLineItem, type ProposalTotals } from "@/lib/proposals/pricing";
+import { lookupService } from "@/lib/proposals/catalog";
 import { recordAuditEvent, buildDataAuditEvent } from "@/lib/audit/events";
 import { invoiceKinds, type InvoiceKind, type LineQtyBasis } from "@/lib/invoices/invoice";
+
+/**
+ * Catalog group, shortened to a one-word (or short) heading. A line whose
+ * category is known prints as two lines — the category, then the specific
+ * item, e.g. "Training" over "First Aid / CPR / AED Training" — rather than
+ * just the bare name, so a client scanning the invoice sees what kind of
+ * thing each line is without reading every description.
+ */
+const CATEGORY_LABELS: Record<string, string> = {
+  "Platform & Licensing": "Platform",
+  "Implementation & Consulting": "Implementation",
+  "Safety Documents & Programs": "Safety Document",
+  "Training Catalog": "Training",
+  "Audits & Field Support": "Audit",
+  "Travel & Expenses": "Travel",
+  Custom: "Service",
+};
+
+/**
+ * The two-line description an invoice line prints, when the row's category
+ * is known. Only "service" rows carry a catalog group (packages and phases
+ * don't), and only a catalog key resolves one — a hand-typed custom service
+ * has no group to look up, so it stays a single line, same as before.
+ */
+function describeLine(row: ProposalLineItem): string {
+  if (row.source !== "service") return row.name || row.desc || "Line item";
+
+  const group = lookupService(row.key)?.group;
+  const category = group ? CATEGORY_LABELS[group] : null;
+
+  return category ? `${category}\n${row.name}` : row.name || row.desc || "Line item";
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LooseClient = any;
@@ -104,7 +137,7 @@ export function buildFullLines(totals: ProposalTotals, reference: string): { lin
     const lineTotal = round2(row.amount * scale);
 
     return {
-      description: (row.name || row.desc || "Line item").slice(0, 500),
+      description: describeLine(row).slice(0, 500),
       quantity: qty,
       unit_amount: unitAmount,
       line_total: lineTotal,

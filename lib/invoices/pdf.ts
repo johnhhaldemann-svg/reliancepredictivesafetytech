@@ -190,14 +190,32 @@ export async function renderInvoicePdf(model: InvoiceDocumentModel): Promise<Uin
   drawTableHeader();
 
   for (const line of model.lines) {
-    const descLines = wrapText(line.description, fonts.regular, 9.5, CONTENT_WIDTH * COLS[0].width - 10);
+    // A description with an embedded newline is "Category\nSpecific item" —
+    // see lib/invoices/create-from-proposal.ts's describeLine() — and prints
+    // as a small bold category heading above the wrapped item name, rather
+    // than wrapping the whole string as one paragraph.
+    const [category, ...rest] = line.description.split("\n");
+    const nameText = rest.length > 0 ? rest.join(" ") : null;
+    const descWidth = CONTENT_WIDTH * COLS[0].width - 10;
+    const descLines: { text: string; bold?: boolean; color?: ReturnType<typeof rgb> }[] = nameText
+      ? [
+          { text: category, bold: true, color: MUTED },
+          ...wrapText(nameText, fonts.regular, 9.5, descWidth).map((text) => ({ text })),
+        ]
+      : wrapText(line.description, fonts.regular, 9.5, descWidth).map((text) => ({ text }));
     const rowHeight = Math.max(16, descLines.length * 12 + 4);
     layout.ensure(rowHeight);
     if (layout.y === PAGE_HEIGHT - MARGIN_TOP) drawTableHeader();
 
     const topY = layout.y;
-    descLines.forEach((text, i) => {
-      layout.page.drawText(toPdfText(text), { x: colX(0) + 6, y: topY - 11 - i * 12, size: 9.5, font: fonts.regular, color: INK });
+    descLines.forEach((entry, i) => {
+      layout.page.drawText(toPdfText(entry.text), {
+        x: colX(0) + 6,
+        y: topY - 11 - i * 12,
+        size: entry.bold ? 8 : 9.5,
+        font: entry.bold ? fonts.bold : fonts.regular,
+        color: entry.color ?? INK,
+      });
     });
     layout.page.drawText(line.qty, { x: colX(1), y: topY - 11, size: 9.5, font: fonts.regular, color: INK });
     layout.page.drawText(line.unit, { x: colX(2), y: topY - 11, size: 9.5, font: fonts.regular, color: INK });

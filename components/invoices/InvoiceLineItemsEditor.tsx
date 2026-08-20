@@ -98,12 +98,13 @@ export function InvoiceLineItemsEditor({
           >
             <div className="field">
               <label htmlFor={`line-desc-${index}`}>Description</label>
-              <input
+              <textarea
                 id={`line-desc-${index}`}
-                type="text"
+                rows={line.description.includes("\n") ? 2 : 1}
                 value={line.description}
                 disabled={!editable || isPending}
                 maxLength={500}
+                placeholder="A line above the name (e.g. &quot;Training&quot;) prints as its category heading."
                 onChange={(event) => updateLine(index, { description: event.target.value })}
               />
             </div>
