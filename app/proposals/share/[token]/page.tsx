@@ -126,6 +126,7 @@ export default async function ProposalSharePage({ params }: { params: Promise<{ 
           status: view.status,
           currentRevision: view.revisionNumber,
           validUntil: view.validUntil,
+          proposalNumber: view.proposalNumber,
         }}
       />
 

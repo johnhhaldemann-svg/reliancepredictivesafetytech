@@ -572,6 +572,7 @@ export function ProposalWorkspace({
             status: proposal.status,
             currentRevision: baseRevision,
             validUntil: proposal.valid_until,
+            proposalNumber: proposal.proposal_number ?? null,
           }}
         />
       ) : null,
@@ -582,6 +583,7 @@ export function ProposalWorkspace({
       proposal.title,
       proposal.status,
       proposal.valid_until,
+      proposal.proposal_number,
       baseRevision,
     ],
   );

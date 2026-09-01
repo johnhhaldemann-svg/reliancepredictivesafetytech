@@ -9,6 +9,9 @@ import {
   serializeClientContacts,
   type ClientCompanyDetail,
 } from "./client-contacts";
+// Value import back into transaction-templates, which imports only TYPES from
+// here — those are erased, so there is no runtime cycle.
+import { proposalTypeLabelFromState } from "./transaction-templates";
 
 export interface GeneratorItem {
   type: string;
@@ -92,12 +95,27 @@ function fieldText(state: GeneratorState, id: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** Proposal title shown in the platform list: "<Client Co> — Platform Proposal". */
+/**
+ * Proposal title shown in the portal list: "<Client Co> — <Engagement> Proposal".
+ *
+ * The engagement half comes from the proposal's own stamped type, never from a
+ * constant. This used to read "Platform Proposal" for every proposal ever
+ * written, so a training engagement, a fixed-price deliverable and an advisory
+ * retainer all announced themselves as platform business in the ledger, in
+ * search, and on the invoice raised against them. Only the platform types may
+ * say platform — same rule the seeded packageKey already follows in
+ * transaction-templates.ts.
+ *
+ * A proposal written before the type stamp existed, or started blank, has no
+ * type to name: it falls back to a bare "— Proposal" rather than asserting a
+ * type nobody chose.
+ */
 export function deriveTitleFromState(state: GeneratorState | null, fallback: string): string {
   if (!state) return fallback;
   const company = fieldText(state, "clientCompany");
   if (!company) return fallback;
-  return `${company} — Platform Proposal`;
+  const engagement = proposalTypeLabelFromState(state.fields);
+  return engagement ? `${company} — ${engagement} Proposal` : `${company} — Proposal`;
 }
 
 /** Short list-view summary, e.g. "RPST-2026-001 · pilot · 12 line items". */

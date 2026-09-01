@@ -40,6 +40,8 @@ export interface ProposalDocumentProps {
     status: ProposalStatus;
     currentRevision: number;
     validUntil: string | null;
+    /** The database's own client_proposals.proposal_number — never the typed field. */
+    proposalNumber: string | null;
   };
   /** Set when rendering a historical revision rather than the live proposal. */
   revisionNumber?: number;

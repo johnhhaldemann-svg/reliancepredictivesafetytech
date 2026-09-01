@@ -129,6 +129,7 @@ function modelFor(state: GeneratorState): ProposalDocumentModel {
       status: "draft",
       currentRevision: 1,
       validUntil: null,
+      proposalNumber: null,
     },
     team: [],
     signature: null,

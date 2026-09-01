@@ -56,6 +56,7 @@ function modelFor(source: GeneratorState) {
       status: "draft",
       currentRevision: 1,
       validUntil: "2026-05-01",
+      proposalNumber: null,
     },
   });
 }

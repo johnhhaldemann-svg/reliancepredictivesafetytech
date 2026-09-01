@@ -24,6 +24,7 @@ const proposal = {
   status: "draft" as const,
   currentRevision: 1,
   validUntil: "2026-12-31",
+  proposalNumber: null,
 };
 
 function model(state: GeneratorState) {
