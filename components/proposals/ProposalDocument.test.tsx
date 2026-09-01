@@ -29,6 +29,7 @@ const subject: ProposalDocumentProps["proposal"] = {
   status: "sent",
   currentRevision: 5,
   validUntil: "2026-05-01",
+  proposalNumber: null,
 };
 
 /**

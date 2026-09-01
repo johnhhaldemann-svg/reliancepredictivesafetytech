@@ -52,6 +52,7 @@ const subject = (overrides: Partial<ProposalDocumentSubject> = {}): ProposalDocu
   status: "draft" as ProposalStatus,
   currentRevision: 3,
   validUntil: null,
+  proposalNumber: null,
   ...overrides,
 });
 

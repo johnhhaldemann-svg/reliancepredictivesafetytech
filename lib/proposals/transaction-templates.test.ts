@@ -153,7 +153,7 @@ describe("every built-in template body", () => {
 
       const model = buildProposalDocumentModel({
         state,
-        proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null },
+        proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null, proposalNumber: null },
       });
       expect(model.includesPlatformPackage, key).toBe(false);
       expect(model.packageHeading, key).toBe("Engagement Summary");
@@ -173,7 +173,7 @@ describe("every built-in template body", () => {
       const state = buildTransactionTemplateState(key);
       const model = buildProposalDocumentModel({
         state,
-        proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null },
+        proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null, proposalNumber: null },
       });
       expect(model.includesPlatformPackage, key).toBe(true);
       expect(model.packageHeading, key).toBe("Selected Platform Package");
@@ -186,21 +186,21 @@ describe("every built-in template body", () => {
   it("headlines the document with the engagement, not a package it does not sell", () => {
     const training = buildProposalDocumentModel({
       state: buildTransactionTemplateState("training"),
-      proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null },
+      proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null, proposalNumber: null },
     });
     expect(training.docline).toBe("Training Services Proposal");
     expect(training.proposalTypeLabel).toBe("Training Services");
 
     const fixed = buildProposalDocumentModel({
       state: buildTransactionTemplateState("fixed_price"),
-      proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null },
+      proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null, proposalNumber: null },
     });
     expect(fixed.docline).toBe("Fixed-Price Services Proposal");
 
     // The pilot keeps its own headline, driven by the package rather than the type.
     const pilot = buildProposalDocumentModel({
       state: buildTransactionTemplateState("pilot"),
-      proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null },
+      proposal: { id: "p", title: "T", status: "draft", currentRevision: 1, validUntil: null, proposalNumber: null },
     });
     expect(pilot.docline).toMatch(/pilot/i);
   });

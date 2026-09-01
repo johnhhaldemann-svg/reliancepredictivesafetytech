@@ -203,6 +203,7 @@ export async function fileAcceptedProposalPdf(input: AcceptanceFilingInput): Pro
         status: (proposal.status as ProposalStatus) ?? "accepted",
         currentRevision,
         validUntil: (proposal.valid_until as string | null) ?? null,
+        proposalNumber: (proposal.proposal_number as string | null) ?? null,
       },
       revisionNumber,
       team,

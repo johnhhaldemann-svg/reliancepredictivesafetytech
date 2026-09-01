@@ -63,6 +63,13 @@ export interface SharedProposalView {
   proposalId: string;
   /** Title of the SHARED revision, not the live working copy. */
   title: string;
+  /**
+   * The live proposal's allocated number — read from the proposal, not the
+   * revision, because the number identifies the deal and does not change when
+   * a revision is saved. This is the reference the client may quote back on a
+   * purchase order, so it has to be the one the platform can look up.
+   */
+  proposalNumber: string | null;
   status: ProposalStatus;
   validUntil: string | null;
   revisionId: string;
@@ -138,7 +145,7 @@ export async function resolveShareLink(rawToken: unknown): Promise<ResolvedShare
       .maybeSingle(),
     db
       .from("client_proposals")
-      .select("id, title, status, valid_until, accepted_at, accepted_by_name, declined_at")
+      .select("id, title, proposal_number, status, valid_until, accepted_at, accepted_by_name, declined_at")
       .eq("id", record.proposal_id)
       .maybeSingle(),
   ]);
@@ -152,6 +159,7 @@ export async function resolveShareLink(rawToken: unknown): Promise<ResolvedShare
       linkId: record.id,
       proposalId: proposal.id,
       title: (revision.title as string) || (proposal.title as string),
+      proposalNumber: (proposal.proposal_number ?? null) as string | null,
       status: proposal.status as ProposalStatus,
       validUntil: (proposal.valid_until ?? null) as string | null,
       revisionId: revision.id as string,

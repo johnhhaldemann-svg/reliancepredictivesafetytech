@@ -65,7 +65,7 @@ export default async function ProposalDetailPage({
     supabase
       .from("client_proposals")
       .select(
-        "id, client_id, title, status, owner, proposal_value, valid_until, summary, body_markdown, current_revision, form_data",
+        "id, client_id, title, proposal_number, status, owner, proposal_value, valid_until, summary, body_markdown, current_revision, form_data",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -169,6 +169,7 @@ export default async function ProposalDetailPage({
     id: proposal.id as string,
     client_id: (proposal.client_id ?? null) as string | null,
     title: proposal.title as string,
+    proposal_number: (proposal.proposal_number ?? null) as string | null,
     status: proposal.status as ProposalStatus,
     owner: (proposal.owner ?? null) as string | null,
     proposal_value: proposal.proposal_value != null ? Number(proposal.proposal_value) : null,
@@ -331,6 +332,7 @@ export default async function ProposalDetailPage({
                 status: normalized.status,
                 currentRevision: normalized.current_revision,
                 validUntil: normalized.valid_until,
+                proposalNumber: normalized.proposal_number ?? null,
               }}
             />
           ) : (

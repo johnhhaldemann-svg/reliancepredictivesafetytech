@@ -34,7 +34,7 @@ export default async function ProposalRevisionPage({
   const [{ data: proposal }, { data: revision }] = await Promise.all([
     supabase
       .from("client_proposals")
-      .select("id, title, status, valid_until, current_revision")
+      .select("id, title, proposal_number, status, valid_until, current_revision")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -54,6 +54,9 @@ export default async function ProposalRevisionPage({
     status: proposal.status as ProposalStatus,
     currentRevision: Number(proposal.current_revision ?? 1),
     validUntil: (proposal.valid_until ?? null) as string | null,
+    // From the proposal, not the revision: an archived snapshot still belongs
+    // to the same deal and carries the same number.
+    proposalNumber: (proposal.proposal_number ?? null) as string | null,
   };
 
   const state = isGeneratorState(revision.form_data) ? revision.form_data : null;
