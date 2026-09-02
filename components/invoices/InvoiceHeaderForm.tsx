@@ -17,6 +17,7 @@ export interface InvoiceHeaderFormValues {
   payment_terms: string | null;
   client_agreement_ref: string | null;
   prepared_by: string | null;
+  variance_reason: string | null;
 }
 
 /** Only a portal admin's edits pass client_invoices RLS ("Admins can settle invoices"). */
@@ -185,14 +186,38 @@ export function InvoiceHeaderForm({
         />
       </div>
 
+      {/*
+        The signed proposal is never edited to fit an invoice (Steve Sladky /
+        Custin, 2026-08-31). When the money moves, this is where the reason
+        goes — and the database requires it before invoices against a proposal
+        may exceed its signed value.
+      */}
+      <div className="field">
+        <label htmlFor="invoice-variance">Why this differs from the proposal</label>
+        <textarea
+          id="invoice-variance"
+          rows={2}
+          value={values.variance_reason ?? ""}
+          disabled={!editable || isPending}
+          maxLength={2000}
+          placeholder="e.g. Six attendees on the day, not twelve. Leave blank when the invoice matches the proposal."
+          onChange={(event) => set("variance_reason", event.target.value)}
+        />
+        <p style={{ color: "var(--portal-muted)", fontSize: "0.82rem", marginTop: 4 }}>
+          Kept with the invoice as the internal record of the change. The signed proposal stays exactly as the client
+          accepted it.
+        </p>
+      </div>
+
       <div className="field">
         <label htmlFor="invoice-notes">Notes</label>
         <textarea
           id="invoice-notes"
-          rows={3}
+          rows={4}
           value={values.notes ?? ""}
           disabled={!editable || isPending}
           maxLength={4000}
+          placeholder="Printed at the foot of the invoice — payment instructions, a thank-you, anything the client should read."
           onChange={(event) => set("notes", event.target.value)}
         />
       </div>
