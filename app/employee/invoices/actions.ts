@@ -64,6 +64,7 @@ const EDITABLE_HEADER_FIELDS = [
   "payment_terms",
   "client_agreement_ref",
   "prepared_by",
+  "variance_reason",
 ] as const;
 
 export interface InvoiceHeaderPatch {
@@ -78,6 +79,12 @@ export interface InvoiceHeaderPatch {
   payment_terms?: string | null;
   client_agreement_ref?: string | null;
   prepared_by?: string | null;
+  /**
+   * Why this invoice differs from the signed proposal's value. The database
+   * requires it before invoices against a proposal may exceed that value —
+   * editing the signed proposal to fit is not on offer (2026-08-31).
+   */
+  variance_reason?: string | null;
 }
 
 /**

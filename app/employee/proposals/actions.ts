@@ -890,8 +890,15 @@ export async function setProposalStatus(
   // share-link writers gate on `accepted_at is null` / `declined_at is null` —
   // so without this, round two of a proposal can never be accepted or declined
   // by the client at all, and the stale round-one reason stays attached to a
-  // live deal. The outcome of each round lives in the audit trail and in the
-  // revision history; these columns describe the CURRENT round only.
+  // live deal. These columns describe the CURRENT round only.
+  //
+  // Clearing them used to DESTROY the record of a signature, which is why the
+  // workflow taught on 2026-08-31 (save the revision as a draft, then raise the
+  // invoice) quietly erased what the client had accepted. It no longer does:
+  // capture_client_proposal_signature() copies every acceptance into
+  // client_proposal_signatures the moment it happens, and nothing here can
+  // reach that table. The reset below is now what it always claimed to be —
+  // a statement about the current round, not a deletion of history.
   if (status === "draft") {
     patch.accepted_at = null;
     patch.accepted_by_name = null;

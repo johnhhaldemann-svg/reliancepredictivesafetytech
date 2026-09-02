@@ -25,18 +25,67 @@ function lineTotal(line: EditableLine): number {
   return Math.round(multiplier * line.unit_amount * 100) / 100;
 }
 
-function formatMoney(value: number) {
-  return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+function formatMoney(value: number, currency = "USD") {
+  return value.toLocaleString("en-US", { style: "currency", currency: currency || "USD", maximumFractionDigits: 2 });
+}
+
+/**
+ * Subtotal, tax and the grand total — the number the invoice will actually ask
+ * the client for. Rendered identically whether or not the invoice is editable,
+ * so the figure does not change shape when a draft is issued.
+ */
+function InvoiceRunningTotal({
+  subtotal,
+  tax,
+  total,
+  currency,
+  inline = false,
+}: {
+  subtotal: number;
+  tax: number;
+  total: number;
+  currency: string;
+  inline?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        marginLeft: inline ? "auto" : undefined,
+        marginTop: inline ? undefined : 12,
+        display: "grid",
+        gridTemplateColumns: "auto auto",
+        gap: "2px 14px",
+        justifyContent: inline ? "end" : "start",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      <span style={{ color: "var(--portal-muted)", fontSize: "0.9rem" }}>Subtotal</span>
+      <span style={{ textAlign: "right", fontSize: "0.9rem" }}>{formatMoney(subtotal, currency)}</span>
+      {tax > 0 ? (
+        <>
+          <span style={{ color: "var(--portal-muted)", fontSize: "0.9rem" }}>Tax</span>
+          <span style={{ textAlign: "right", fontSize: "0.9rem" }}>{formatMoney(tax, currency)}</span>
+        </>
+      ) : null}
+      <span style={{ fontWeight: 600 }}>Total</span>
+      <span style={{ textAlign: "right", fontWeight: 600 }}>{formatMoney(total, currency)}</span>
+    </div>
+  );
 }
 
 export function InvoiceLineItemsEditor({
   invoiceId,
   initialLines,
   editable,
+  taxAmount = 0,
+  currency = "USD",
 }: {
   invoiceId: string;
   initialLines: EditableLine[];
   editable: boolean;
+  /** From the invoice header, so the running figure is the one being committed to. */
+  taxAmount?: number;
+  currency?: string;
 }) {
   const router = useRouter();
   const [lines, setLines] = useState<EditableLine[]>(initialLines.length > 0 ? initialLines : [emptyLine()]);
@@ -70,7 +119,12 @@ export function InvoiceLineItemsEditor({
     });
   }
 
-  const subtotal = lines.reduce((sum, line) => sum + lineTotal(line), 0);
+  const subtotal = Math.round(lines.reduce((sum, line) => sum + lineTotal(line), 0) * 100) / 100;
+  // Steve asked to "see the total price calculation before finalizing the
+  // document" (2026-08-31). A subtotal alone is not that number: tax lives on
+  // the header, so the figure actually being committed to is subtotal + tax.
+  const tax = Math.round((Number(taxAmount) || 0) * 100) / 100;
+  const total = Math.round((subtotal + tax) * 100) / 100;
 
   return (
     <div className="form-panel">
@@ -98,9 +152,18 @@ export function InvoiceLineItemsEditor({
           >
             <div className="field">
               <label htmlFor={`line-desc-${index}`}>Description</label>
+              {/*
+                Three rows, not one. This box sized itself to a single line
+                unless the text already contained a newline, so a description
+                scrolled out of sight while it was being typed — the first thing
+                Steve asked for on 2026-08-31. It grows with the content up to a
+                point, then scrolls, so a long line never pushes the qty and
+                price controls off the row.
+              */}
               <textarea
                 id={`line-desc-${index}`}
-                rows={line.description.includes("\n") ? 2 : 1}
+                rows={Math.min(6, Math.max(3, line.description.split("\n").length))}
+                style={{ resize: "vertical", minHeight: "4.5rem" }}
                 value={line.description}
                 disabled={!editable || isPending}
                 maxLength={500}
@@ -171,7 +234,7 @@ export function InvoiceLineItemsEditor({
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 4 }}>
-                <span style={{ fontSize: "0.85rem", color: "var(--portal-muted)" }}>{formatMoney(lineTotal(line))}</span>
+                <span style={{ fontSize: "0.85rem", color: "var(--portal-muted)" }}>{formatMoney(lineTotal(line), currency)}</span>
                 {editable && lines.length > 1 ? (
                   <button
                     type="button"
@@ -197,10 +260,10 @@ export function InvoiceLineItemsEditor({
           <button type="button" className="button button-primary" disabled={isPending} onClick={save}>
             {isPending ? "Saving…" : "Save line items"}
           </button>
-          <span style={{ marginLeft: "auto", fontWeight: 600 }}>Subtotal: {formatMoney(Math.round(subtotal * 100) / 100)}</span>
+          <InvoiceRunningTotal subtotal={subtotal} tax={tax} total={total} currency={currency} inline />
         </div>
       ) : (
-        <p style={{ marginTop: 12, fontWeight: 600 }}>Subtotal: {formatMoney(Math.round(subtotal * 100) / 100)}</p>
+        <InvoiceRunningTotal subtotal={subtotal} tax={tax} total={total} currency={currency} />
       )}
     </div>
   );
