@@ -60,17 +60,23 @@ export async function renderInvoiceDocx(model: InvoiceDocumentModel): Promise<Bu
   // A description with an embedded newline is "Category\nSpecific item" (see
   // lib/invoices/create-from-proposal.ts's describeLine()) and prints as a
   // small bold category line above the item name, rather than one paragraph.
-  const descriptionParagraphs = (description: string) => {
+  const descriptionParagraphs = (description: string, serviceDate: string | null) => {
     const [category, ...rest] = description.split("\n");
-    if (rest.length === 0) return [para(description, { size: 19 })];
-    return [para(category, { bold: true, size: 15, color: MUTED, spacingAfter: 20 }), para(rest.join(" "), { size: 19 })];
+    const body =
+      rest.length === 0
+        ? [para(description, { size: 19 })]
+        : [para(category, { bold: true, size: 15, color: MUTED, spacingAfter: 20 }), para(rest.join(" "), { size: 19 })];
+    // When the work was done, under the item it was done for. Small and muted
+    // so it reads as a qualifier on the line, not as another line item.
+    if (serviceDate) body.push(para(`Serviced ${serviceDate}`, { size: 15, color: MUTED }));
+    return body;
   };
 
   const lineRows = model.lines.map(
     (line) =>
       new TableRow({
         children: [
-          cell(descriptionParagraphs(line.description), { width: COL_WIDTHS[0] }),
+          cell(descriptionParagraphs(line.description, line.serviceDate), { width: COL_WIDTHS[0] }),
           cell([para(line.qty, { size: 19, alignment: AlignmentType.RIGHT })], { width: COL_WIDTHS[1] }),
           cell([para(line.unit, { size: 19 })], { width: COL_WIDTHS[2] }),
           cell([para(line.unitAmount, { size: 19, alignment: AlignmentType.RIGHT })], { width: COL_WIDTHS[3] }),

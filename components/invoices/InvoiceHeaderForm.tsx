@@ -149,6 +149,16 @@ export function InvoiceHeaderForm({
         </div>
       </div>
 
+      {/*
+        This guidance used to be auto-written into the invoice's Notes, where it
+        printed on the client's copy — an instruction to the drafter, addressed
+        to the client. It belongs here, next to the field it is about.
+      */}
+      <p style={{ color: "var(--portal-muted)", fontSize: "0.82rem", marginTop: -4 }}>
+        An invoice raised from a proposal already has any tax folded into the proposal&apos;s total. Add an amount here
+        only if this invoice needs its own tax treatment — and adjust the line items to match.
+      </p>
+
       <div className="field">
         <label htmlFor="invoice-payment-terms">Payment terms</label>
         <input

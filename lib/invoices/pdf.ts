@@ -203,6 +203,11 @@ export async function renderInvoicePdf(model: InvoiceDocumentModel): Promise<Uin
           ...wrapText(nameText, fonts.regular, 9.5, descWidth).map((text) => ({ text })),
         ]
       : wrapText(line.description, fonts.regular, 9.5, descWidth).map((text) => ({ text }));
+    // When the work was done, under the item it was done for. Printed small and
+    // muted so it reads as a qualifier on the line, not as another line item.
+    if (line.serviceDate) {
+      descLines.push({ text: `Serviced ${line.serviceDate}`, color: MUTED });
+    }
     const rowHeight = Math.max(16, descLines.length * 12 + 4);
     layout.ensure(rowHeight);
     if (layout.y === PAGE_HEIGHT - MARGIN_TOP) drawTableHeader();

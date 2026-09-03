@@ -31,7 +31,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const [{ data: lines }, { data: client }, { data: proposal }] = await Promise.all([
     supabase
       .from("client_invoice_line_items")
-      .select("description, quantity, unit_amount, line_total, unit")
+      .select("description, quantity, unit_amount, line_total, unit, service_date")
       .eq("invoice_id", id)
       .order("sort_order", { ascending: true }),
     invoice.client_id
