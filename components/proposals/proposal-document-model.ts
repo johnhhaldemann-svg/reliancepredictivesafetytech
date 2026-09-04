@@ -433,6 +433,25 @@ export interface ProposalDocumentSubject {
   status: ProposalStatus;
   currentRevision: number;
   validUntil: string | null;
+  /**
+   * `client_proposals.proposal_number` — the number the DATABASE allocated,
+   * and the only one anything else in the platform can look this proposal up
+   * by.
+   *
+   * The document used to print `fields.proposalNo` from the generator state
+   * instead. That field is a free-text input a seller types into, so the two
+   * drifted apart the moment anyone touched it: proposal RPS-2026-0011 was
+   * printing "WFO-2026-002" on the client's copy while the ledger, the audit
+   * trail and the invoice raised against it all said RPS-2026-0011. A client
+   * quoting the number back on a PO would have been quoting a number that
+   * exists nowhere in the system.
+   *
+   * Required, not optional, so a new call site has to answer the question
+   * rather than silently inheriting the typed field again. Pass null only
+   * where the record genuinely has no number yet — the typed field is then
+   * the fallback, and `missingValue` after that.
+   */
+  proposalNumber: string | null;
 }
 
 export interface ProposalDocumentModel {
@@ -907,7 +926,9 @@ export function buildProposalDocumentModel({
     clientContacts,
     preparedByBlock: buildParty(sellerName, sellerLines),
     proposalDate: formatDocumentDate(fieldText(state, "proposalDate")),
-    proposalNumber: fieldText(state, "proposalNo", missingValue),
+    // The record's number wins over anything typed into the generator; see
+    // ProposalDocumentSubject.proposalNumber.
+    proposalNumber: (proposal.proposalNumber ?? "").trim() || fieldText(state, "proposalNo", missingValue),
     validity,
     term,
     termLabel: term.rangeLabel

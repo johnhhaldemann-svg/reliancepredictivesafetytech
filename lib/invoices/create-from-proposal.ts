@@ -229,7 +229,26 @@ export async function createInvoiceFromProposal(
       tax_amount: draft.tax,
       total: round2(draft.subtotal + draft.tax),
       job_name: proposal.title ?? null,
-      notes: `Generated from ${reference}.${draft.tax > 0 ? "" : " Tax, if any, is already folded into the proposal's total — adjust the line items if this invoice needs its own tax treatment."}`,
+      /*
+       * Left EMPTY on purpose.
+       *
+       * `notes` is printed under a NOTES heading on the client's invoice, by
+       * both renderers. It used to be auto-filled with "Generated from
+       * <proposal>. Tax, if any, is already folded into the proposal's total —
+       * adjust the line items if this invoice needs its own tax treatment." —
+       * an internal provenance note and an instruction addressed to whoever was
+       * drafting, both landing in front of the client. That is what "the notes
+       * comment at the bottom of the invoice needs work" meant (Steve,
+       * 2026-08-31).
+       *
+       * The provenance is not lost: proposal_id links the two, the ledger and
+       * the invoice screen both show "Raised from <proposal>", and the audit
+       * trail records the creation. The tax caveat now sits beside the tax
+       * field in the editor, where the person who can act on it will read it.
+       * What remains here is a blank space for the seller to write something
+       * the client should actually read.
+       */
+      notes: null,
       created_by: input.actorUserId,
     })
     .select("id, invoice_number")

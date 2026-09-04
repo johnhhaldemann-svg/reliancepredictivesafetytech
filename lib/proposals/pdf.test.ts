@@ -93,6 +93,7 @@ function modelFor(state: GeneratorState, extras: Parameters<typeof buildProposal
       status: "sent",
       currentRevision: 3,
       validUntil: "2026-06-02",
+      proposalNumber: null,
     },
     team: extras,
   });
@@ -220,6 +221,7 @@ describe("renderProposalPdf", () => {
         status: "draft",
         currentRevision: 1,
         validUntil: null,
+        proposalNumber: null,
       },
     });
 

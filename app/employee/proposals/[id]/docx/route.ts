@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: proposal } = await supabase
     .from("client_proposals")
-    .select("id, title, status, current_revision, valid_until, form_data, accepted_at")
+    .select("id, title, proposal_number, status, current_revision, valid_until, form_data, accepted_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -64,6 +64,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       status: proposal.status as ProposalStatus,
       currentRevision,
       validUntil: (proposal.valid_until ?? null) as string | null,
+      proposalNumber: (proposal.proposal_number ?? null) as string | null,
     },
     revisionNumber,
     team,

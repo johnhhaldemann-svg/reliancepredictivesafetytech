@@ -11,6 +11,16 @@ export interface InvoiceDocumentLine {
   unit: string;
   unitAmount: string;
   lineTotal: string;
+  /**
+   * When the work was actually performed, e.g. "Aug 16, 2026".
+   *
+   * The column has existed on client_invoice_line_items since the invoice
+   * model landed and the editor has always offered it, but neither renderer
+   * printed it — so a client asking "what date was this training?" could not
+   * answer it from the invoice. Steve asked for it on 2026-08-31. Null when the
+   * line has no date set, and then nothing prints.
+   */
+  serviceDate: string | null;
 }
 
 export interface InvoiceDocumentModel {
@@ -40,6 +50,7 @@ export interface InvoiceDocumentSourceLine {
   unit_amount: number | string;
   line_total: number | string;
   unit?: string | null;
+  service_date?: string | null;
 }
 
 export interface InvoiceDocumentSource {
@@ -138,6 +149,7 @@ export function buildInvoiceDocumentModel(input: {
       unit: line.unit || "",
       unitAmount: money(line.unit_amount, currency),
       lineTotal: money(line.line_total, currency),
+      serviceDate: formatDate(line.service_date ?? null),
     })),
     subtotal: money(input.invoice.subtotal, currency),
     tax: money(input.invoice.tax_amount, currency),

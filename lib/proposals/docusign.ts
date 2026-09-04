@@ -182,6 +182,7 @@ export async function sendProposalForDocusign(
       status: (loaded.proposal.status as ProposalStatus) ?? "sent",
       currentRevision: Number(loaded.proposal.current_revision ?? loaded.revisionNumber),
       validUntil: (loaded.proposal.valid_until as string | null) ?? null,
+      proposalNumber: (loaded.proposal.proposal_number as string | null) ?? null,
     },
     revisionNumber: loaded.revisionNumber,
     team,

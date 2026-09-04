@@ -43,7 +43,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { data: invoice } = await (supabase as LooseClient)
     .from("client_invoices")
     .select(
-      "id, client_id, proposal_id, invoice_number, status, kind, issue_date, due_date, currency, subtotal, tax_amount, total, job_name, consultant_name, payment_terms, client_agreement_ref, prepared_by, notes, void_reason, created_by",
+      "id, client_id, proposal_id, invoice_number, status, kind, issue_date, due_date, currency, subtotal, tax_amount, total, job_name, consultant_name, payment_terms, client_agreement_ref, prepared_by, notes, variance_reason, void_reason, created_by",
     )
     .eq("id", id)
     .maybeSingle();
@@ -127,7 +127,13 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
       <div className="document-grid">
         <section>
-          <InvoiceLineItemsEditor invoiceId={invoice.id} initialLines={editableLines} editable={isDraft} />
+          <InvoiceLineItemsEditor
+            invoiceId={invoice.id}
+            initialLines={editableLines}
+            editable={isDraft}
+            taxAmount={Number(invoice.tax_amount ?? 0)}
+            currency={invoice.currency}
+          />
         </section>
         <InvoiceHeaderForm
           invoiceId={invoice.id}
@@ -144,6 +150,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             payment_terms: invoice.payment_terms,
             client_agreement_ref: invoice.client_agreement_ref,
             prepared_by: invoice.prepared_by,
+            variance_reason: invoice.variance_reason ?? null,
           }}
         />
       </div>

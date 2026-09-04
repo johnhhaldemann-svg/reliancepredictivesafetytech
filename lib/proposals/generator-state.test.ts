@@ -142,10 +142,38 @@ describe("isGeneratorState", () => {
 });
 
 describe("deriveTitleFromState", () => {
-  it("builds the title from the client company", () => {
+  it("names the engagement from the proposal's own stamped type", () => {
+    expect(
+      deriveTitleFromState(
+        state({ fields: { clientCompany: "Acme Construction", proposalType: "training" } }),
+        "Untitled",
+      ),
+    ).toBe("Acme Construction — Training Services Proposal");
+  });
+
+  it("says platform only when the type actually is a platform purchase", () => {
+    expect(
+      deriveTitleFromState(
+        state({ fields: { clientCompany: "Acme Construction", proposalType: "platform" } }),
+        "Untitled",
+      ),
+    ).toBe("Acme Construction — Platform Subscription Proposal");
+  });
+
+  it("never calls a services engagement a platform one", () => {
+    for (const type of ["training", "fixed_price", "time_and_materials", "retainer"]) {
+      const title = deriveTitleFromState(state({ fields: { clientCompany: "Acme", proposalType: type } }), "Untitled");
+      expect(title).not.toMatch(/platform/i);
+    }
+  });
+
+  it("asserts no type for a proposal that never stamped one", () => {
     expect(deriveTitleFromState(state({ fields: { clientCompany: "Acme Construction" } }), "Untitled")).toBe(
-      "Acme Construction — Platform Proposal",
+      "Acme Construction — Proposal",
     );
+    expect(
+      deriveTitleFromState(state({ fields: { clientCompany: "Acme Construction", proposalType: "nonsense" } }), "Untitled"),
+    ).toBe("Acme Construction — Proposal");
   });
 
   it("falls back when the company is blank or state is missing", () => {

@@ -32,6 +32,10 @@ import {
   type ProposalDocusignEnvelope,
 } from "@/components/proposals/ProposalDocusignPanel";
 import {
+  ProposalSignatureLedger,
+  type ProposalSignatureRow,
+} from "@/components/proposals/ProposalSignatureLedger";
+import {
   ProposalTimeline,
   type TimelineAcceptance,
   type TimelineShareLink,
@@ -65,7 +69,7 @@ export default async function ProposalDetailPage({
     supabase
       .from("client_proposals")
       .select(
-        "id, client_id, title, status, owner, proposal_value, valid_until, summary, body_markdown, current_revision, form_data",
+        "id, client_id, title, proposal_number, status, owner, proposal_value, valid_until, summary, body_markdown, current_revision, form_data",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -105,7 +109,7 @@ export default async function ProposalDetailPage({
   // proposal page down until the migration lands. Instead the feature degrades:
   // the panel says it is unavailable and everything else keeps working.
   // ---------------------------------------------------------------------------
-  const [acceptanceResult, shareLinkResult, docusignResult] = await Promise.all([
+  const [acceptanceResult, signatureResult, shareLinkResult, docusignResult] = await Promise.all([
     supabase
       .from("client_proposals")
       .select(
@@ -113,6 +117,15 @@ export default async function ProposalDetailPage({
       )
       .eq("id", id)
       .maybeSingle(),
+    // The append-only signature ledger. Same degrade-gracefully treatment as the
+    // panels above: if the migration has not landed the panel simply does not
+    // render, rather than taking the page down.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("client_proposal_signatures")
+      .select("id, signed_at, signer_name, signer_email, proposal_number, proposal_title, proposal_value, revision_id")
+      .eq("proposal_id", id)
+      .order("signed_at", { ascending: false }),
     supabase
       .from("client_proposal_share_links")
       .select("id, revision_id, created_at, expires_at, revoked_at, first_viewed_at, last_viewed_at, view_count")
@@ -169,6 +182,7 @@ export default async function ProposalDetailPage({
     id: proposal.id as string,
     client_id: (proposal.client_id ?? null) as string | null,
     title: proposal.title as string,
+    proposal_number: (proposal.proposal_number ?? null) as string | null,
     status: proposal.status as ProposalStatus,
     owner: (proposal.owner ?? null) as string | null,
     proposal_value: proposal.proposal_value != null ? Number(proposal.proposal_value) : null,
@@ -253,6 +267,20 @@ export default async function ProposalDetailPage({
       }
     : null;
 
+  // Revision numbers for the ledger, resolved the same way the timeline does it.
+  const signatures: ProposalSignatureRow[] = signatureResult.error
+    ? []
+    : ((signatureResult.data ?? []) as Record<string, unknown>[]).map((row) => ({
+        id: row.id as string,
+        signedAt: (row.signed_at ?? null) as string | null,
+        signerName: (row.signer_name ?? null) as string | null,
+        signerEmail: (row.signer_email ?? null) as string | null,
+        proposalNumber: (row.proposal_number ?? null) as string | null,
+        proposalTitle: (row.proposal_title ?? null) as string | null,
+        proposalValue: row.proposal_value != null ? Number(row.proposal_value) : null,
+        revisionNumber: row.revision_id ? revisionNumberById.get(row.revision_id as string) ?? null : null,
+      }));
+
   const shareGate = canShareProposal(normalized.status);
   const primaryRecipient = documentState ? parseClientContacts(documentState.fields).find((contact) => contact.email) : null;
 
@@ -331,6 +359,7 @@ export default async function ProposalDetailPage({
                 status: normalized.status,
                 currentRevision: normalized.current_revision,
                 validUntil: normalized.valid_until,
+                proposalNumber: normalized.proposal_number ?? null,
               }}
             />
           ) : (
@@ -368,6 +397,8 @@ export default async function ProposalDetailPage({
           canApprove={canApprove}
         />
       </div>
+
+      <ProposalSignatureLedger signatures={signatures} currentRevision={normalized.current_revision} />
 
       <ProposalTimeline
         status={normalized.status}
